@@ -24,7 +24,7 @@
             --search-focus-shadow: rgba(254, 251, 242, 0.7);
         }
 
-        /* --- NEW: Dark Theme Variables --- */
+        /* --- Dark Theme Variables --- */
         body.dark-theme {
             --corkboard-bg: #3D352A;
             --corkboard-texture: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23574d3c' fill-opacity='0.4'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c-5.523 0-10-4.477-10-10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2zM30 30c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10-10-4.477-10-10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10S10 15.523 10 10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
@@ -49,7 +49,6 @@
             transition: background-color 0.3s ease;
         }
 
-        /* --- NEW: Top Bar for Icons --- */
         .top-bar {
             position: fixed;
             top: 24px;
@@ -59,10 +58,10 @@
             justify-content: space-between;
             align-items: center;
             z-index: 50;
-            pointer-events: none; /* Allows clicks to go through the container */
+            pointer-events: none;
         }
         .icon-button {
-            pointer-events: all; /* Makes buttons clickable */
+            pointer-events: all;
             background-color: var(--paper-bg);
             border: none;
             width: 44px;
@@ -88,7 +87,7 @@
         
         .control-bar {
             padding: 0 16px;
-            margin-top: 60px; /* Space for top bar */
+            margin-top: 60px;
             margin-bottom: 32px;
         }
 
@@ -128,7 +127,6 @@
             box-shadow: 3px 3px 10px var(--shadow-color);
             position: relative;
             aspect-ratio: 5 / 4;
-            /* FIX: Performance improvement */
             will-change: transform, opacity;
             transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
                         box-shadow 0.2s ease-out, 
@@ -150,12 +148,11 @@
         }
         
         .note:hover {
-             /* FIX: Hover transform is now only non-rotated on mobile */
             transform: translateY(-5px) scale(1.03);
             box-shadow: 6px 6px 20px var(--shadow-color);
         }
         
-        .note.hidden { transform: scale(0.9); opacity: 0; pointer-events: none; }
+        .note.hidden { display: none !important; }
         
         .note-title {
             font-family: 'Kalam', cursive;
@@ -196,19 +193,16 @@
                 padding-right: 40px;
             }
             .fast-scroll-slider { right: 10px; }
-            /* FIX: Rotations are ONLY applied on larger screens to prevent mobile jank */
             .note:nth-of-type(4n+1) { transform: rotate(-1.5deg); }
             .note:nth-of-type(4n+2) { transform: rotate(1deg); }
             .note:nth-of-type(4n+3) { transform: rotate(2deg); }
             .note:nth-of-type(4n+4) { transform: rotate(-1deg); }
-            /* Hover effect on desktop includes rotation reset */
             .note:hover { transform: translateY(-8px) scale(1.05) rotate(0deg); z-index: 10; }
         }
     </style>
 </head>
 <body>
     
-    <!-- NEW: Top Bar -->
     <div class="top-bar">
         <a href="https://curiouskite.github.io/" class="icon-button" aria-label="Home">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
@@ -248,7 +242,7 @@
             if (savedTheme) {
                 body.classList.add(savedTheme + '-theme');
             } else {
-                body.classList.add('light-theme'); // Default to light
+                body.classList.add('light-theme');
             }
 
             themeSwitcher.addEventListener('click', () => {
@@ -282,8 +276,8 @@
                     note.dataset.letter = note.querySelector('.note-title').textContent.trim().charAt(0).toUpperCase();
                 });
             }
-            applyColors(); // Initial color application
-            themeSwitcher.addEventListener('click', applyColors); // Re-apply on theme change
+            applyColors();
+            themeSwitcher.addEventListener('click', applyColors);
 
 
             // --- SLIDER & FILTER LOGIC ---
@@ -298,10 +292,14 @@
             function applyFilters() {
                 const searchQuery = searchInput.value.trim().toLowerCase();
                 sortedNotes.forEach(note => {
-                    const titleText = note.querySelector('.note-title').textContent.toLowerCase();
+                    // **THE FIX IS HERE:**
+                    // Instead of just the title, we now check the *entire* text content of the note.
+                    const itemText = note.textContent.toLowerCase();
                     const noteLetter = note.dataset.letter;
-                    const searchMatch = titleText.includes(searchQuery);
+
+                    const searchMatch = itemText.includes(searchQuery);
                     const letterMatch = !activeLetterFilter || noteLetter === activeLetterFilter;
+                    
                     note.classList.toggle('hidden', !(searchMatch && letterMatch));
                 });
             }
