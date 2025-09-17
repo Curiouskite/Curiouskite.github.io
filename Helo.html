@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Click Button UI</title>
+    <style>
+        body { 
+            display: grid;
+            place-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: sans-serif;
+        }
+        .click-button {
+            font-size: 1.5em;
+            padding: 15px 30px;
+            cursor: pointer;
+            border: 2px solid #007BFF;
+            border-radius: 8px;
+            background-color: #007BFF;
+            color: white;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .click-button.clicked {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="myButton" class="click-button" onclick="buttonClicked()">Click Me</button>
+
+    <script>
+        function buttonClicked() {
+            // Find the button by its ID
+            const button = document.getElementById('myButton');
+            
+            // Change the button's text
+            button.innerHTML = 'Clicked!';
+
+            // Add the 'clicked' class for styling
+            button.classList.add('clicked');
+        }
+    </script>
+
+</body>
+</html>
