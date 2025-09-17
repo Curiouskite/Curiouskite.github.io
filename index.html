@@ -3,147 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Search</title>
+    <title>File Search - Digital Corkboard</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
 
     <style>
-        /* --- General & Body Styling --- */
+        :root {
+            --corkboard-bg: #D2B48C;
+            --paper-bg: #FEFBF2; 
+            --text-color: #4A4A4A;
+            --shadow-color: rgba(0,0,0,0.15);
+            --pin-color: #E53E3E;
+        }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: #E0E0E0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--corkboard-bg);
+            background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C7A87D' fill-opacity='0.4'%3E%3Cpath d='M50 50c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10c-5.523 0-10-4.477-10-10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2zM30 30c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10-10-4.477-10-10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2zM10 10c0-5.523 4.477-10 10-10s10 4.477 10 10-4.477 10-10 10S10 15.523 10 10zm10 2c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
             margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
+            padding: 24px;
         }
 
-        /* --- Main Container --- */
-        .container {
-            width: 100%;
-            max-width: 500px;
-            box-sizing: border-box;
+        .control-bar {
+            padding: 0 16px;
+            margin-bottom: 32px;
+            position: sticky;
+            top: 24px;
+            z-index: 20;
         }
 
-        h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            color: #FFFFFF;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        /* --- Search Bar --- */
-        .search-bar {
-            width: 100%;
-            padding: 15px 20px;
-            margin-bottom: 25px;
+        #searchInput {
+            font-family: 'Inter', sans-serif;
             font-size: 1rem;
-            background-color: #1E1E1E;
-            border: 1px solid #333;
-            border-radius: 12px;
-            color: #E0E0E0;
-            box-sizing: border-box;
-            transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .search-bar::placeholder {
-            color: #757575;
-        }
-
-        .search-bar:focus {
-            outline: none;
-            border-color: #4A90E2;
-            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.2);
-        }
-
-        /* --- File List Styling --- */
-        #fileList {
-            list-style: none;
-            padding: 0;
-            margin: 0;
             width: 100%;
+            max-width: 450px;
+            display: block;
+            margin: 0 auto;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 50px;
+            background-color: var(--paper-bg);
+            color: var(--text-color);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            -webkit-appearance: none;
+        }
+        
+        #searchInput:focus {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(254, 251, 242, 0.7);
         }
 
-        #fileList li {
-            margin-bottom: 12px;
-            background-color: #1E1E1E;
-            border-radius: 12px;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+        .notes-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding-right: 30px; 
         }
 
-        #fileList li:hover {
-            background-color: #2c2c2c;
-            transform: translateY(-2px);
+        .note {
+            background-color: var(--paper-bg);
+            box-shadow: 3px 3px 10px var(--shadow-color);
+            transition: transform 0.3s ease-out, box-shadow 0.2s ease-out, opacity 0.3s ease-in-out, background-color 0.3s ease;
+            position: relative;
+            aspect-ratio: 5 / 4;
+        }
+        
+        .note::before {
+            content: ''; position: absolute; top: 12px; left: 50%;
+            transform: translateX(-50%); width: 12px; height: 12px;
+            background-color: var(--pin-color); border-radius: 50%;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.3); z-index: 10;
+        }
+        
+        .note a {
+            text-decoration: none; color: inherit; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            width: 100%; height: 100%; padding: 20px; box-sizing: border-box;
+        }
+        
+        .note:hover {
+            transform: translateY(-5px) scale(1.03);
+            box-shadow: 6px 6px 20px var(--shadow-color);
+        }
+        
+        .note.hidden { transform: scale(0.8); opacity: 0; pointer-events: none; }
+        
+        .note-title {
+            font-family: 'Kalam', cursive;
+            font-size: clamp(1.25rem, 5vw, 1.75rem);
+            font-weight: 700; margin-bottom: 10px;
         }
 
-        #fileList a {
+        .note-filename {
+            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+            color: #A0937D;
+        }
+
+        .fast-scroll-slider {
+            position: fixed;
+            top: 50%;
+            right: 5px;
+            transform: translateY(-50%);
             display: flex;
             flex-direction: column;
-            padding: 18px 20px;
-            text-decoration: none;
-            color: #E0E0E0;
-            font-size: 1rem;
-            font-weight: 500;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            padding: 8px 4px;
+            z-index: 30;
+            backdrop-filter: blur(2px);
         }
 
-        #fileList small {
-            font-size: 0.85rem;
-            color: #888;
-            margin-top: 4px;
+        .fast-scroll-slider a {
+            text-decoration: none;
+            color: var(--text-color);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px;
+            transition: all 0.2s;
+            border-radius: 4px;
+            width: 16px;
+            text-align: center;
+        }
+        
+        /* NEW: Active state for the letter filter */
+        .fast-scroll-slider a.active,
+        .fast-scroll-slider a:hover {
+            background-color: rgba(255, 255, 255, 0.7);
+            color: #000;
+            transform: scale(1.2);
+        }
+
+        @media (min-width: 640px) {
+            .notes-grid {
+                grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                padding-right: 40px;
+            }
+            .fast-scroll-slider { right: 10px; }
+            .note:nth-of-type(4n+1) { transform: rotate(-1.5deg); }
+            .note:nth-of-type(4n+2) { transform: rotate(1deg); }
+            .note:nth-of-type(4n+3) { transform: rotate(2deg); }
+            .note:nth-of-type(4n+4) { transform: rotate(-1deg); }
+            .note:hover { transform: translateY(-8px) scale(1.05) rotate(0deg); z-index: 10; }
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Find a Project File</h1>
-        
-        <input type="text" id="searchInput" class="search-bar" placeholder="Search for files...">
-        
-        <ul id="fileList">
-            <li>
-                <a href="Helo.html">
-                    Main Welcome Page
-                    <small>Helo.html</small>
-                </a>
-            </li>
-            </ul>
-    </div>
+    <header class="control-bar">
+        <input type="search" id="searchInput" placeholder="Find a note...">
+    </header>
+
+    <main class="notes-grid" id="fileList">
+        <div class="note"> <a href="#"><span class="note-title">API Routes</span><span class="note-filename">api-routes.js</span></a></div>
+        <div class="note"> <a href="#"><span class="note-title">App Logic</span><span class="note-filename">dashboard.js</span></a></div>
+        <div class="note"> <a href="#"><span class="note-title">Global Styles</span><span class="note-filename">styles.css</span></a></div>
+        <div class="note"> <a href="#"><span class="note-title">Image Assets</span><span class="note-filename">assets/images</span></a></div>
+        <div class="note"> <a href="#"><span class="note-title">User Profile</span><span class="note-filename">profile.html</span></a></div>
+        <div class="note"> <a href="Helo.html"><span class="note-title">Welcome Page</span><span class="note-filename">Helo.html</span></a></div>
+    </main>
+    
+    <div class="fast-scroll-slider" id="fastScrollSlider"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const searchInput = document.getElementById('searchInput');
-            const fileListItems = document.querySelectorAll('#fileList li');
+            const notesGrid = document.getElementById('fileList');
+            const fastScrollSlider = document.getElementById('fastScrollSlider');
+            let activeLetterFilter = null; // NEW: Track the active letter filter
 
-            searchInput.addEventListener('input', () => {
-                // 1. Trim whitespace from start/end, convert to lowercase, and collapse multiple spaces into one.
-                const query = searchInput.value
-                    .trim()
-                    .toLowerCase()
-                    .replace(/\s+/g, ' ');
+            const notesArray = Array.from(document.querySelectorAll('#fileList .note'));
+            notesArray.sort((a, b) => a.querySelector('.note-title').textContent.trim().localeCompare(b.querySelector('.note-title').textContent.trim()));
+            
+            notesGrid.innerHTML = '';
+            notesArray.forEach(note => notesGrid.appendChild(note));
+            
+            const sortedNotes = document.querySelectorAll('#fileList .note');
+            const colorPalette = ['#FEFBF2', '#FFFACD', '#C1E1C1', '#BDE0FE', '#FFD1DC'];
+            sortedNotes.forEach((note, index) => {
+                note.style.backgroundColor = colorPalette[index % colorPalette.length];
+                note.dataset.letter = note.querySelector('.note-title').textContent.trim().charAt(0).toUpperCase();
+            });
 
-                fileListItems.forEach(item => {
-                    // 2. Get the item's text and normalize it the same way as the query.
-                    const itemText = item.textContent
-                        .toLowerCase()
-                        .replace(/\s+/g, ' ');
+            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (const letter of alphabet) {
+                const letterLink = document.createElement('a');
+                letterLink.href = '#';
+                letterLink.textContent = letter;
+                letterLink.dataset.targetLetter = letter;
+                fastScrollSlider.appendChild(letterLink);
+            }
+            
+            // --- NEW: Combined filter function ---
+            function applyFilters() {
+                const searchQuery = searchInput.value.trim().toLowerCase();
+                sortedNotes.forEach(note => {
+                    const titleText = note.querySelector('.note-title').textContent.toLowerCase();
+                    const noteLetter = note.dataset.letter;
 
-                    // 3. Check if the normalized item text includes the normalized query.
-                    if (itemText.includes(query)) {
-                        item.style.display = ''; // Show item
-                    } else {
-                        item.style.display = 'none'; // Hide item
-                    }
+                    const searchMatch = titleText.includes(searchQuery);
+                    const letterMatch = !activeLetterFilter || noteLetter === activeLetterFilter;
+
+                    // A note is visible if it matches BOTH the active letter (if any) AND the search query
+                    note.classList.toggle('hidden', !(searchMatch && letterMatch));
                 });
+            }
+
+            // --- NEW: Slider now FILTERS instead of scrolling ---
+            fastScrollSlider.addEventListener('click', (e) => {
+                if (e.target.tagName !== 'A') return;
+                e.preventDefault();
+                
+                const targetLetter = e.target.dataset.targetLetter;
+                searchInput.value = ''; // Clear search when using letter filter
+                
+                // Toggle filter off if the same letter is clicked again
+                if (activeLetterFilter === targetLetter) {
+                    activeLetterFilter = null;
+                    e.target.classList.remove('active');
+                } else {
+                    activeLetterFilter = targetLetter;
+                    // Update active class on slider
+                    fastScrollSlider.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+                    e.target.classList.add('active');
+                }
+                applyFilters();
+            });
+            
+            // --- UPDATED: Search input now clears letter filter ---
+            searchInput.addEventListener('input', () => {
+                if (activeLetterFilter) {
+                    activeLetterFilter = null;
+                    fastScrollSlider.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+                }
+                applyFilters();
             });
         });
     </script>
 
 </body>
 </html>
+
