@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced SI Prefix Quiz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .quiz-container {
+            max-width: 600px;
+        }
+        .feedback {
+            min-height: 2.5rem;
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .option-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .correct {
+            background-color: #22c55e !important; /* green-500 */
+            color: white !important;
+            border-color: #16a34a !important; /* green-600 */
+        }
+        .incorrect {
+            background-color: #ef4444 !important; /* red-500 */
+            color: white !important;
+            border-color: #dc2626 !important; /* red-600 */
+        }
+        .disabled-options .option-btn {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .option-btn:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="quiz-container w-full bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">The Advanced SI Prefix Challenge</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">Now with 20 questions per round!</p>
+        </header>
+
+        <main id="quiz-area">
+            <div class="flex justify-between items-center mb-4">
+                 <div class="text-lg font-semibold">Score: <span id="score" class="text-indigo-500">0</span></div>
+                 <div class="text-lg font-semibold">Question: <span id="question-number">1</span> / <span id="total-questions">20</span></div>
+            </div>
+
+            <!-- Question Display -->
+            <div id="question-container" class="bg-gray-50 dark:bg-gray-700 p-5 rounded-lg shadow-inner min-h-[6rem] flex items-center justify-center">
+                <p id="question-text" class="text-xl text-center font-medium">Loading question...</p>
+            </div>
+
+            <!-- Answer Options -->
+            <div id="options-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                <!-- Options will be injected here by JavaScript -->
+            </div>
+            
+            <!-- Feedback and Next Button -->
+            <div id="feedback-container" class="mt-6 text-center">
+                <p id="feedback-text" class="feedback text-lg font-medium">&nbsp;</p>
+                <button id="next-btn" class="hidden mt-4 w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-800 transition-all duration-300 shadow-md">
+                    Next Question
+                </button>
+            </div>
+        </main>
+        
+        <!-- Final Results Screen -->
+        <div id="results-area" class="hidden text-center">
+            <h2 class="text-2xl font-bold mb-4">Quiz Complete!</h2>
+            <p class="text-xl mb-2">Your final score is:</p>
+            <p id="final-score" class="text-5xl font-extrabold text-indigo-600 dark:text-indigo-400 mb-6">0</p>
+            <p id="final-message" class="text-lg text-gray-700 dark:text-gray-300 mb-6"></p>
+            <button id="restart-btn" class="bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-800 transition-all duration-300 shadow-md">
+                Play Again
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const scoreEl = document.getElementById('score');
+            const questionNumberEl = document.getElementById('question-number');
+            const totalQuestionsEl = document.getElementById('total-questions');
+            const questionTextEl = document.getElementById('question-text');
+            const optionsContainerEl = document.getElementById('options-container');
+            const feedbackTextEl = document.getElementById('feedback-text');
+            const nextBtn = document.getElementById('next-btn');
+            const quizArea = document.getElementById('quiz-area');
+            const resultsArea = document.getElementById('results-area');
+            const finalScoreEl = document.getElementById('final-score');
+            const finalMessageEl = document.getElementById('final-message');
+            const restartBtn = document.getElementById('restart-btn');
+
+            // --- Comprehensive Quiz Data ---
+            const prefixes = [
+                { name: 'peta',  symbol: 'P', factor: 1e15, type: 'Multiple' },
+                { name: 'tera',  symbol: 'T', factor: 1e12, type: 'Multiple' },
+                { name: 'giga',  symbol: 'G', factor: 1e9,  type: 'Multiple' },
+                { name: 'mega',  symbol: 'M', factor: 1e6,  type: 'Multiple' },
+                { name: 'kilo',  symbol: 'k', factor: 1e3,  type: 'Multiple' },
+                { name: 'hecto', symbol: 'h', factor: 1e2,  type: 'Multiple' },
+                { name: 'deca',  symbol: 'da',factor: 1e1,  type: 'Multiple' },
+                { name: 'deci',  symbol: 'd', factor: 1e-1, type: 'Submultiple' },
+                { name: 'centi', symbol: 'c', factor: 1e-2, type: 'Submultiple' },
+                { name: 'milli', symbol: 'm', factor: 1e-3, type: 'Submultiple' },
+                { name: 'micro', symbol: 'μ', factor: 1e-6, type: 'Submultiple' },
+                { name: 'nano',  symbol: 'n', factor: 1e-9, type: 'Submultiple' },
+                { name: 'pico',  symbol: 'p', factor: 1e-12, type: 'Submultiple' },
+                { name: 'femto', symbol: 'f', factor: 1e-15, type: 'Submultiple' },
+                { name: 'atto',  symbol: 'a', factor: 1e-18, type: 'Submultiple' }
+            ];
+            
+            const totalQuizQuestions = 20;
+            let currentQuestionIndex = 0;
+            let score = 0;
+            let currentQuestion = {};
+            let usedQuestions = []; // Track question types to avoid repetition
+
+            // --- Helper Functions ---
+            const getRandomElement = (arr) => arr[Math.floor(Math.random() * arr.length)];
+            const shuffleArray = (arr) => [...arr].sort(() => 0.5 - Math.random());
+            const formatNumber = (num) => {
+                if (num >= 1e6) return num.toExponential(0);
+                return num.toLocaleString('en-US');
+            };
+
+            // --- Question Generation Engine ---
+            function generateQuestion() {
+                const questionTypes = ['type', 'value', 'symbol', 'nameFromSymbol', 'comparison', 'composition'];
+                let attempts = 0;
+                let question = {};
+                
+                // Try to avoid repeating question types too frequently
+                do {
+                    const randomType = getRandomElement(questionTypes);
+                    const mainPrefix = getRandomElement(prefixes);
+                    
+                    switch (randomType) {
+                        case 'type':
+                            question = {
+                                text: `Is the prefix "${mainPrefix.name}" a multiple or a submultiple?`,
+                                answer: mainPrefix.type,
+                                options: shuffleArray(['Multiple', 'Submultiple'])
+                            };
+                            break;
+                        
+                        case 'value': {
+                            const options = new Set([mainPrefix.factor.toExponential()]);
+                            const candidates = prefixes.filter(p => p.name !== mainPrefix.name);
+                            while (options.size < 4 && candidates.length > 0) {
+                                const randomPrefix = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+                                options.add(randomPrefix.factor.toExponential());
+                            }
+                            question = {
+                                text: `What is the value of the prefix "${mainPrefix.name}"?`,
+                                answer: mainPrefix.factor.toExponential(),
+                                options: shuffleArray([...options])
+                            };
+                            break;
+                        }
+
+                        case 'symbol': {
+                            const options = new Set([mainPrefix.symbol]);
+                            const candidates = prefixes.filter(p => p.name !== mainPrefix.name);
+                            while (options.size < 4 && candidates.length > 0) {
+                                const randomPrefix = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+                                options.add(randomPrefix.symbol);
+                            }
+                            question = {
+                                text: `What is the symbol for the prefix "${mainPrefix.name}"?`,
+                                answer: mainPrefix.symbol,
+                                options: shuffleArray([...options])
+                            };
+                            break;
+                        }
+                        
+                        case 'nameFromSymbol': {
+                            const options = new Set([mainPrefix.name]);
+                            const candidates = prefixes.filter(p => p.name !== mainPrefix.name);
+                            while (options.size < 4 && candidates.length > 0) {
+                                const randomPrefix = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+                                options.add(randomPrefix.name);
+                            }
+                            question = {
+                                text: `Which prefix does the symbol "${mainPrefix.symbol}" represent?`,
+                                answer: mainPrefix.name,
+                                options: shuffleArray([...options])
+                            };
+                            break;
+                        }
+
+                        case 'comparison': {
+                            const compareType = Math.random() > 0.5 ? 'largest' : 'smallest';
+                            let selectedPrefixes = [];
+                            const candidates = [...prefixes];
+                            
+                            while(selectedPrefixes.length < 4 && candidates.length > 0) {
+                                const randomIndex = Math.floor(Math.random() * candidates.length);
+                                selectedPrefixes.push(candidates.splice(randomIndex, 1)[0]);
+                            }
+                            
+                            selectedPrefixes.sort((a, b) => a.factor - b.factor);
+                            const answerPrefix = (compareType === 'largest') ? selectedPrefixes[selectedPrefixes.length - 1] : selectedPrefixes[0];
+                            
+                            question = {
+                                text: `Which of the following prefixes is the ${compareType}?`,
+                                answer: answerPrefix.name,
+                                options: shuffleArray(selectedPrefixes.map(p => p.name))
+                            };
+                            break;
+                        }
+
+                        case 'composition': {
+                            let answer, text;
+                            if (mainPrefix.type === 'Multiple') {
+                                answer = mainPrefix.factor;
+                                text = `The prefix "${mainPrefix.name}" is a multiple. How many base units are in one "${mainPrefix.name}" unit?`;
+                            } else {
+                                answer = 1 / mainPrefix.factor;
+                                text = `The prefix "${mainPrefix.name}" is a submultiple. How many "${mainPrefix.name}" parts are in one base unit?`;
+                            }
+                            
+                            const options = new Set([formatNumber(answer)]);
+                            const candidates = prefixes.filter(p => p.name !== mainPrefix.name);
+                            
+                            while(options.size < 4 && candidates.length > 0) {
+                                const randomPrefix = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+                                let distractorValue;
+                                if (randomPrefix.type === 'Multiple') {
+                                    distractorValue = randomPrefix.factor;
+                                } else {
+                                    distractorValue = 1 / randomPrefix.factor;
+                                }
+                                options.add(formatNumber(distractorValue));
+                            }
+                            
+                            question = {
+                                text: text,
+                                answer: formatNumber(answer),
+                                options: shuffleArray([...options])
+                            };
+                            break;
+                        }
+                    }
+                    
+                    attempts++;
+                } while (attempts < 10); // Prevent infinite loops
+                
+                return question;
+            }
+
+            // --- Main Game Logic ---
+            function startGame() {
+                score = 0;
+                currentQuestionIndex = 0;
+                usedQuestions = [];
+                quizArea.classList.remove('hidden');
+                resultsArea.classList.add('hidden');
+                totalQuestionsEl.textContent = totalQuizQuestions;
+                updateScoreUI();
+                displayQuestion();
+            }
+
+            function displayQuestion() {
+                resetState();
+                if (currentQuestionIndex >= totalQuizQuestions) {
+                    showResults();
+                    return;
+                }
+
+                currentQuestion = generateQuestion();
+                questionNumberEl.textContent = currentQuestionIndex + 1;
+                questionTextEl.textContent = currentQuestion.text;
+
+                currentQuestion.options.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.classList.add('option-btn', 'w-full', 'p-4', 'font-semibold', 'border-2', 'border-gray-300', 'dark:border-gray-600', 'rounded-lg', 'hover:bg-indigo-100', 'dark:hover:bg-gray-600', 'focus:outline-none', 'focus:ring-2', 'focus:ring-indigo-400');
+                    button.setAttribute('tabindex', index + 1);
+                    button.addEventListener('click', () => selectAnswer(button, option));
+                    button.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            selectAnswer(button, option);
+                        }
+                    });
+                    optionsContainerEl.appendChild(button);
+                });
+            }
+
+            function selectAnswer(button, selectedOption) {
+                // Disable all buttons
+                Array.from(optionsContainerEl.children).forEach(btn => {
+                    btn.disabled = true;
+                    btn.style.pointerEvents = 'none';
+                });
+                
+                const isCorrect = selectedOption === currentQuestion.answer;
+                
+                if (isCorrect) {
+                    score++;
+                    feedbackTextEl.textContent = "Correct!";
+                    feedbackTextEl.className = 'feedback text-lg font-medium text-green-600 dark:text-green-400';
+                    button.classList.add('correct');
+                    updateScoreUI();
+                } else {
+                    feedbackTextEl.textContent = `Incorrect. The answer is ${currentQuestion.answer}.`;
+                    feedbackTextEl.className = 'feedback text-lg font-medium text-red-600 dark:text-red-400';
+                    button.classList.add('incorrect');
+                    
+                    // Highlight correct answer
+                    Array.from(optionsContainerEl.children).forEach(btn => {
+                        if (btn.textContent === currentQuestion.answer) {
+                            btn.classList.add('correct');
+                        }
+                    });
+                }
+                nextBtn.classList.remove('hidden');
+                nextBtn.focus();
+            }
+
+            function showNextQuestion() {
+                currentQuestionIndex++;
+                displayQuestion();
+            }
+
+            function showResults() {
+                quizArea.classList.add('hidden');
+                resultsArea.classList.remove('hidden');
+                finalScoreEl.textContent = `${score} / ${totalQuizQuestions}`;
+                
+                const percentage = Math.round((score / totalQuizQuestions) * 100);
+                let message = '';
+                if (percentage === 100) message = "Perfect score! You have truly mastered SI prefixes! 🎉";
+                else if (percentage >= 90) message = "Outstanding! Your knowledge is impressive! 🌟";
+                else if (percentage >= 80) message = "Excellent work! You have strong understanding! 👏";
+                else if (percentage >= 70) message = "Great job! You have a solid grasp! 👍";
+                else if (percentage >= 60) message = "Good effort! Keep practicing! 📚";
+                else if (percentage >= 40) message = "Not bad! A little more study will help! 💪";
+                else message = "Keep studying! You'll get the hang of it! 📖";
+                
+                finalMessageEl.textContent = `${percentage}% - ${message}`;
+                restartBtn.focus();
+            }
+
+            function resetState() {
+                nextBtn.classList.add('hidden');
+                optionsContainerEl.innerHTML = '';
+                feedbackTextEl.innerHTML = '&nbsp;';
+                feedbackTextEl.className = 'feedback text-lg font-medium';
+            }
+            
+            function updateScoreUI() {
+                scoreEl.textContent = score;
+            }
+
+            // --- Event Listeners ---
+            nextBtn.addEventListener('click', showNextQuestion);
+            restartBtn.addEventListener('click', startGame);
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !nextBtn.classList.contains('hidden')) {
+                    showNextQuestion();
+                }
+            });
+
+            // --- Initializer ---
+            startGame();
+        });
+    </script>
+</body>
+</html>
