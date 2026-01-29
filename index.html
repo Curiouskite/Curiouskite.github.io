@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Screenwriter Pro - Simple Parser</title>
+    <style>
+        :root {
+            --bg-app: #ffffff;
+            --bg-offset: #f9fafb;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --primary: #0f172a;
+            --accent: #2563eb;
+            --accent-light: #eff6ff;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-script: "Courier Prime", "Courier New", Courier, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-app);
+            color: var(--text-main);
+            height: 100dvh;
+            overflow: hidden;
+        }
+
+        button, input, select, textarea {
+            font: inherit;
+            color: inherit;
+        }
+
+        /* === HEADER === */
+        .header {
+            background: var(--bg-app);
+            border-bottom: 1px solid var(--border);
+            padding: 0 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            flex-shrink: 0;
+            z-index: 20;
+            gap: 12px;
+        }
+
+        .header-title-input {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--primary);
+            border: 1px solid transparent;
+            background: transparent;
+            width: 100%;
+            border-radius: 6px;
+            padding: 4px 8px;
+            transition: all 0.2s;
+        }
+        .header-title-input:focus {
+            background: var(--bg-offset);
+            border-color: var(--border);
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .btn-header {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            touch-action: manipulation;
+        }
+        .btn-header:active {
+            background: var(--bg-offset);
+        }
+        .btn-header.danger {
+            color: white;
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+        .btn-header.select-active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* === HOME VIEW === */
+        #viewHome {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: var(--bg-offset);
+        }
+
+        .scene-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+
+        .scene-card {
+            background: var(--bg-app);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            touch-action: manipulation;
+        }
+        .scene-card.selected {
+            border: 2px solid var(--accent);
+            background: var(--accent-light);
+        }
+
+        .scene-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .scene-info { flex: 1; }
+        .scene-num {
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .scene-name-card {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--primary);
+            margin-bottom: 6px;
+        }
+        .scene-meta-card {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            font-family: var(--font-script);
+        }
+
+        .btn-card-insert {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-offset);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-left: 12px;
+            touch-action: manipulation;
+        }
+
+        .empty-create-btn {
+            width: 100%;
+            padding: 48px 24px;
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            background: white;
+            color: var(--text-sub);
+            font-size: 1.15rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            touch-action: manipulation;
+        }
+        .empty-create-btn:active {
+            background: var(--bg-offset);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* === FAB & MENU === */
+        .fab-btn {
+            position: fixed;
+            bottom: 32px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+            cursor: pointer;
+            z-index: 50;
+            touch-action: manipulation;
+            transition: transform 0.1s;
+            user-select: none; 
+            -webkit-user-select: none;
+        }
+        .fab-btn:active {
+            transform: scale(0.95);
+        }
+
+        #dropUpMenu {
+            position: fixed;
+            bottom: 100px;
+            right: 24px;
+            width: 200px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            display: none;
+            flex-direction: column;
+            z-index: 51;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        #dropUpMenu.visible {
+            display: flex;
+        }
+
+        .menu-item {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .menu-item:last-child {
+            border-bottom: none;
+        }
+        .menu-item:active {
+            background: var(--bg-offset);
+        }
+        .menu-item.special {
+            background: var(--accent-light);
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+        }
+        .menu-item-gear {
+            margin-left: auto;
+            color: var(--text-sub);
+            padding: 4px;
+        }
+
+        /* === SHOWCASE / READ VIEW === */
+        #viewShowcase {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            background: var(--bg-app);
+        }
+
+        .script-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 24px 120px;
+            touch-action: pan-y;
+        }
+
+        .scene-header-block {
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .main-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .stamps-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+            justify-content: center;
+        }
+
+        .stamp {
+            background: var(--bg-offset);
+            color: var(--text-sub);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: var(--font-script);
+            border: 1px solid var(--border);
+        }
+
+        /* === EDITOR ROWS === */
+        .editor-row {
+            margin-bottom: 16px;
+            font-family: var(--font-script);
+            font-size: 1.05rem;
+            line-height: 1.6;
+            display: block;
+        }
+
+        .editor-label {
+            font-weight: 700;
+            margin-right: 8px;
+            user-select: none;
+            cursor: pointer; 
+            display: inline; 
+        }
+
+        .editor-input {
+            display: inline;
+            outline: none;
+            color: var(--primary);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .editor-input.is-action {
+            font-style: italic;
+            color: var(--text-main);
+        }
+
+        /* === META DRAWER === */
+        #metaDrawer {
+            background: var(--bg-offset);
+            border-bottom: 1px solid var(--border);
+            padding: 24px 20px;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+        #metaDrawer.visible {
+            display: block;
+        }
+
+        .meta-section { display: flex; flex-direction: column; gap: 20px; }
+        .meta-group { display: flex; flex-direction: column; }
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        
+        .form-label-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .form-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-settings {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-sub);
+            padding: 4px;
+            font-size: 1rem;
+            line-height: 1;
+            opacity: 0.6;
+        }
+
+        .input-std, select.input-std {
+            width: 100%;
+            height: 42px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0 12px;
+            background: white;
+            font-size: 0.95rem;
+            color: var(--primary);
+            appearance: none;
+        }
+        
+        .meta-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 4px 0;
+            opacity: 0.6;
+        }
+
+        /* === MODALS === */
+        #assetModal, #colorPickerModal, #parserModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+        .asset-card {
+            background: white;
+            width: 90%;
+            max-width: 420px;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            max-height: 82vh;
+        }
+        
+        /* Parser Specific */
+        .parser-textarea {
+            width: 100%;
+            height: 200px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: var(--font-script);
+            font-size: 0.9rem;
+            resize: none;
+            margin-bottom: 12px;
+        }
+
+        .asset-list { flex: 1; overflow-y: auto; margin-bottom: 16px; }
+        .asset-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); align-items: center; }
+        .asset-val { flex: 1; font-weight: 500; cursor: pointer; margin-right: 8px; }
+        .asset-right-actions { display: flex; align-items: center; gap: 4px; }
+        .btn-reorder { background: none; border: none; color: var(--text-sub); font-size: 1.1rem; cursor: pointer; padding: 4px; }
+        .btn-del-asset { color: var(--danger); background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 0 4px; margin-left: 4px; }
+        
+        .char-dot-manage {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 12px;
+            vertical-align: middle;
+            cursor: pointer;
+            border: 2px solid rgba(0,0,0,0.1);
+        }
+        .asset-item-left { display: flex; align-items: center; flex: 1; overflow: hidden; }
+        .asset-add-row { display: flex; gap: 8px; }
+
+        /* Color Picker */
+        .color-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 12px 0; margin-bottom: 12px; }
+        .color-swatch { width: 40px; height: 40px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.1); margin: 0 auto; position: relative; }
+        .color-swatch.active::after { content: '✓'; color: white; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; }
+        
+        .custom-color-row { display: flex; gap: 10px; align-items: center; border-top: 1px solid var(--border); padding-top: 16px; }
+        .native-color-picker { width: 44px; height: 44px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; }
+        .btn-apply-custom { padding: 8px 16px; background: var(--primary); color: white; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<input type="file" id="importFile" accept=".txt" style="display:none" onchange="importScript(this)">
+
+<div id="viewHome">
+    <div class="header">
+        <input id="projectTitle" type="text" class="header-title-input" value="My Script" onblur="save()" maxlength="80">
+        
+        <div class="header-actions" id="headerActions">
+            <button class="btn-header" onclick="document.getElementById('importFile').click()" title="Import Text File">Import</button>
+            <button class="btn-header" onclick="exportScript()" title="Export Text File">Export</button>
+            <button class="btn-header" id="btnSelect" onclick="toggleSelectionMode()">Select</button>
+        </div>
+
+        <div class="header-actions" id="selectionActions" style="display:none">
+            <button class="btn-header danger" onclick="deleteSelected()">Delete</button>
+            <button class="btn-header" onclick="toggleSelectionMode()">Cancel</button>
+        </div>
+    </div>
+    <div id="sceneList" class="scene-list"></div>
+</div>
+
+<div id="viewShowcase">
+    <div class="header">
+        <button class="btn-header" onclick="navHome()">← Back</button>
+        <div id="displaySceneNum" style="flex:1; text-align:center; font-weight:700; color:var(--primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">SCENE 1</div>
+        <div class="header-actions">
+            <button class="btn-header" onclick="copySceneToClipboard()" title="Copy Scene Text">Copy</button>
+            <button class="btn-header" onclick="toggleMeta()">Details</button>
+            <button class="btn-header danger" onclick="deleteScene()">🗑</button>
+        </div>
+    </div>
+
+    <div id="metaDrawer">
+        <div class="meta-section">
+            <div class="meta-group">
+                <div class="form-label-row"><label class="form-label">Scene Heading</label></div>
+                <input id="inName" type="text" class="input-std" placeholder="e.g. THE BANK - DAY" maxlength="80" onblur="saveMeta()">
+            </div>
+            <div class="meta-divider"></div>
+            <div class="meta-grid">
+                <div class="meta-group"><div class="form-label-row"><span class="form-label">Location</span><button class="btn-settings" onclick="manageAssets('loc', 'Locations')">⚙️</button></div><select id="inLoc" class="input-std" onchange="saveMeta()"></select></div>
+                <div class="meta-group"><div class="form-label-row"><span class="form-label">Time</span><button class="btn-settings" onclick="manageAssets('time', 'Times')">⚙️</button></div><select id="inTime" class="input-std" onchange="saveMeta()"></select></div>
+                <div class="meta-group"><div class="form-label-row"><span class="form-label">Month</span><button class="btn-settings" onclick="manageAssets('month', 'Months')">⚙️</button></div><select id="inMonth" class="input-std" onchange="saveMeta()"></select></div>
+                <div class="meta-group"><div class="form-label-row"><span class="form-label">Year</span><button class="btn-settings" onclick="manageAssets('year', 'Years')">⚙️</button></div><select id="inYear" class="input-std" onchange="saveMeta()"></select></div>
+                <div class="meta-group"><div class="form-label-row"><span class="form-label">Clock</span><button class="btn-settings" onclick="manageAssets('clock', 'Clock')">⚙️</button></div><select id="inClock" class="input-std" onchange="saveMeta()"></select></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scriptContent" class="script-content">
+        <div class="scene-header-block">
+            <div id="displayTitle" class="main-title">Untitled Scene</div>
+            <div class="stamps-row">
+                <div id="stampLoc" class="stamp"></div>
+                <div id="stampTime" class="stamp"></div>
+                <div id="stampMonth" class="stamp"></div>
+                <div id="stampYear" class="stamp"></div>
+                <div id="stampClock" class="stamp"></div>
+            </div>
+        </div>
+        <div id="scriptBody"></div>
+    </div>
+
+    <div id="dropUpMenu">
+        <div id="menuListContent"></div>
+    </div>
+    <button id="starBtn" class="fab-btn" onclick="toggleDropUp()">★</button>
+</div>
+
+<div id="assetModal" onclick="if(event.target===this) closeAssetManager()">
+    <div class="asset-card">
+        <div id="assetTitle" style="font-weight:700; margin-bottom:4px;">Manage</div>
+        <div style="font-size:0.82rem; color:var(--text-sub); margin-bottom:16px;">
+            Tap item to rename. Use arrows to reorder. <span id="tapDotHint" style="display:none">Tap dot to color.</span>
+        </div>
+        <div id="assetList" class="asset-list"></div>
+        <div class="asset-add-row">
+            <input id="newAssetInput" type="text" class="input-std" style="margin:0;" placeholder="Add..." maxlength="40">
+            <button class="btn-header" style="background:var(--primary); color:white;" onclick="addNewAsset()">Add</button>
+        </div>
+        <button class="btn-header" style="margin-top:12px; justify-content:center;" onclick="closeAssetManager()">Done</button>
+    </div>
+</div>
+
+<div id="colorPickerModal" onclick="if(event.target===this) document.getElementById('colorPickerModal').style.display='none'">
+    <div class="asset-card" style="max-height: auto;">
+        <div id="colorPickerTitle" style="font-weight:700; margin-bottom:4px; text-align:center;">Select Color</div>
+        <div style="font-size:0.82rem; color:var(--text-sub); margin-bottom:16px; text-align:center;">Tap swatch or enter Hex</div>
+        <div id="colorGrid" class="color-grid"></div>
+        <div class="custom-color-row">
+            <input type="color" id="nativePicker" class="native-color-picker" onchange="syncColorFromNative(this.value)">
+            <input type="text" id="customHexInput" class="input-std" style="margin:0; text-transform:uppercase;" placeholder="#000000" maxlength="7" oninput="syncColorFromText(this.value)">
+            <button class="btn-apply-custom" onclick="applyCustomHex()">OK</button>
+        </div>
+        <button class="btn-header" style="margin-top:12px; justify-content:center;" onclick="document.getElementById('colorPickerModal').style.display='none'">Cancel</button>
+    </div>
+</div>
+
+<div id="parserModal" onclick="if(event.target===this) document.getElementById('parserModal').style.display='none'">
+    <div class="asset-card">
+        <div style="font-weight:700; margin-bottom:4px;">Parse & Append</div>
+        <div style="font-size:0.82rem; color:var(--text-sub); margin-bottom:16px;">
+            Paste text with "Name: Dialog" or "1. Name: Dialog".
+        </div>
+        <textarea id="parserInput" class="parser-textarea" placeholder="5. Elizabeth: Hello world...&#10;Worker 1: The hammer is here."></textarea>
+        <div style="display:flex; gap:8px;">
+            <button class="btn-header danger" style="flex:1; justify-content:center;" onclick="document.getElementById('parserModal').style.display='none'">Cancel</button>
+            <button class="btn-header" style="flex:1; justify-content:center; background:var(--primary); color:white;" onclick="processParserInput()">Parse & Add</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────
+const KEY = 'screenwriter_pro_v16_parser_fix'; 
+const DIVIDER = "==================================================";
+const CHAR_COLORS = ["#2563eb","#dc2626","#16a34a","#d97706","#9333ea","#0891b2","#be123c","#4f46e5","#b45309","#059669","#334155","#57534e","#7c3aed","#c026d3","#db2777"];
+
+let data = {
+    title: "My Script",
+    scenes: [],
+    assets: {
+        loc: ["INT. HOUSE", "EXT. STREET"],
+        time: ["DAY", "NIGHT"],
+        month: ["JAN", "FEB"],
+        year: ["2025"],
+        clock: ["12:00 PM"],
+        chars: ["HERO", "VILLAIN"],
+        charColors: { "DON": "#1e293b" } 
+    }
+};
+
+let curSceneIdx = -1;
+let currentManageKey = '';
+let isSelectionMode = false;
+let selectedIndices = new Set();
+let lastFocusedIndex = -1;
+let targetColorChar = '';
+
+// ──────────────────────────────────────────────
+function init() {
+    const stored = localStorage.getItem(KEY);
+    if (stored) {
+        try {
+            const p = JSON.parse(stored);
+            data = { ...data, ...p };
+            if(!data.assets.charColors) data.assets.charColors = {};
+        } catch {}
+    }
+    document.getElementById('projectTitle').value = data.title;
+    renderHome();
+    
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('dropUpMenu');
+        const btn = document.getElementById('starBtn');
+        if (!menu.contains(e.target) && !btn.contains(e.target)) {
+            menu.classList.remove('visible');
+        }
+    });
+}
+
+function save() {
+    data.title = document.getElementById('projectTitle').value.trim();
+    localStorage.setItem(KEY, JSON.stringify(data));
+}
+
+// ────────────────────────────────────────────── HOME & SELECTION
+function renderHome() {
+    const list = document.getElementById('sceneList');
+    list.innerHTML = '';
+    if (data.scenes.length === 0) {
+        list.innerHTML = `<div class="empty-create-btn" onclick="createNewSceneAtEnd()"><span style="font-size:1.6rem;">+</span> Create First Scene</div>`;
+        return;
+    }
+    data.scenes.forEach((s, i) => {
+        const card = document.createElement('div');
+        let cls = 'scene-card';
+        if (isSelectionMode && selectedIndices.has(i)) cls += ' selected';
+        card.className = cls;
+        card.onclick = (e) => {
+            if (isSelectionMode) { e.stopPropagation(); toggleSelection(i); } else { openShowcase(i); }
+        };
+        const title = s.name?.trim() || `Scene ${i+1}`;
+        let meta = [s.loc, s.time, s.year].filter(Boolean).join(" • ") || "No details";
+        let btn = !isSelectionMode ? `<button class="btn-card-insert" onclick="event.stopPropagation(); insertScene(${i})">+</button>` : '';
+        card.innerHTML = `<div class="scene-header"><div class="scene-info"><div class="scene-num">SCENE ${i + 1}</div><div class="scene-name-card">${title}</div><div class="scene-meta-card">${meta}</div></div>${btn}</div>`;
+        list.appendChild(card);
+    });
+}
+
+function toggleSelectionMode() {
+    isSelectionMode = !isSelectionMode;
+    if (!isSelectionMode) selectedIndices.clear();
+    document.getElementById('headerActions').style.display = isSelectionMode ? 'none' : 'flex';
+    document.getElementById('selectionActions').style.display = isSelectionMode ? 'flex' : 'none';
+    document.getElementById('btnSelect').classList.toggle('select-active', isSelectionMode);
+    renderHome();
+}
+function toggleSelection(i) {
+    if (selectedIndices.has(i)) selectedIndices.delete(i); else selectedIndices.add(i);
+    renderHome();
+}
+function deleteSelected() {
+    if (selectedIndices.size === 0) return;
+    if (!confirm(`Delete ${selectedIndices.size} scene(s)?`)) return;
+    const sorted = [...selectedIndices].sort((a,b)=>b-a);
+    sorted.forEach(idx => data.scenes.splice(idx,1));
+    save();
+    toggleSelectionMode();
+}
+
+// ────────────────────────────────────────────── SCENE OPERATIONS
+function createNewSceneAtEnd() {
+    const prev = data.scenes.length > 0 ? data.scenes.at(-1) : null;
+    data.scenes.push(getInheritedScene(prev));
+    save();
+    openShowcase(data.scenes.length - 1);
+}
+function insertScene(idx) {
+    const prev = data.scenes[idx];
+    data.scenes.splice(idx + 1, 0, getInheritedScene(prev));
+    save();
+    openShowcase(idx + 1);
+}
+function getInheritedScene(prev) {
+    if (!prev) return { loc:"", time:"", month:"", year:"", clock:"", name:"", lines:[] };
+    return { loc: prev.loc||"", time: prev.time||"", month: prev.month||"", year: prev.year||"", clock: prev.clock||"", name: "", lines: [] };
+}
+function deleteScene() {
+    if (!confirm("Delete this scene?")) return;
+    data.scenes.splice(curSceneIdx, 1);
+    save();
+    navHome();
+}
+
+function navHome() {
+    document.getElementById('viewShowcase').style.display = 'none';
+    document.getElementById('viewHome').style.display = 'flex';
+    document.getElementById('starBtn').style.display = 'none'; 
+    renderHome();
+}
+function openShowcase(idx) {
+    curSceneIdx = idx;
+    const s = data.scenes[idx];
+    document.getElementById('viewHome').style.display = 'none';
+    document.getElementById('viewShowcase').style.display = 'flex';
+    document.getElementById('starBtn').style.display = 'flex';
+    document.getElementById('inName').value = s.name || '';
+    refreshDropdowns(s);
+    document.getElementById('metaDrawer').classList.remove('visible');
+    lastFocusedIndex = (s.lines && s.lines.length > 0) ? s.lines.length - 1 : -1;
+    renderContent();
+}
+
+// ────────────────────────────────────────────── EDITOR
+function renderContent() {
+    const s = data.scenes[curSceneIdx];
+    document.getElementById('displaySceneNum').textContent = `SCENE ${curSceneIdx + 1}`;
+    document.getElementById('displayTitle').textContent = s.name || "Untitled Scene";
+    const setStamp = (id, val) => {
+        const el = document.getElementById(id);
+        if (val) { el.textContent = val; el.style.display = 'block'; } else { el.style.display = 'none'; }
+    };
+    setStamp('stampLoc', s.loc); setStamp('stampTime', s.time); setStamp('stampMonth', s.month);
+    setStamp('stampYear', s.year); setStamp('stampClock', s.clock);
+
+    const body = document.getElementById('scriptBody');
+    body.innerHTML = '';
+    (s.lines || []).forEach((l, i) => body.appendChild(createEditorRow(l, i)));
+    
+    // Auto scroll if adding new items
+    if (lastFocusedIndex === (s.lines.length - 1) && s.lines.length > 0) {
+        // slight delay to ensure render
+        setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 50);
+    }
+}
+
+function createEditorRow(lineObj, index) {
+    const row = document.createElement('div');
+    row.className = 'editor-row';
+    row.dataset.idx = index; 
+    
+    if (lineObj.c !== 'AUTHOR') {
+        const color = getColorForName(lineObj.c);
+        const label = document.createElement('span');
+        label.className = 'editor-label';
+        label.textContent = lineObj.c + ":"; 
+        label.style.color = color;
+        label.contentEditable = "false";
+        
+        let timer;
+        label.addEventListener('touchstart', () => timer = setTimeout(() => confirmDeleteLine(index), 600));
+        label.addEventListener('touchend', () => clearTimeout(timer));
+        label.addEventListener('mousedown', () => timer = setTimeout(() => confirmDeleteLine(index), 600));
+        label.addEventListener('mouseup', () => clearTimeout(timer));
+        row.appendChild(label);
+        row.appendChild(document.createTextNode(" "));
+    }
+
+    const input = document.createElement('span');
+    input.className = 'editor-input';
+    if (lineObj.c === 'AUTHOR') input.classList.add('is-action');
+    input.contentEditable = "true";
+    input.textContent = lineObj.t;
+    
+    input.onfocus = function() { lastFocusedIndex = index; };
+    input.oninput = function() { lineObj.t = input.innerText; save(); };
+
+    row.appendChild(input);
+    return row;
+}
+
+function confirmDeleteLine(index) {
+    if (navigator.vibrate) navigator.vibrate(50);
+    const line = data.scenes[curSceneIdx].lines[index];
+    const name = line.c === 'AUTHOR' ? 'Action' : line.c;
+    if (confirm(`Delete this ${name} block?`)) {
+        data.scenes[curSceneIdx].lines.splice(index, 1);
+        save();
+        renderContent();
+        lastFocusedIndex = -1;
+    }
+}
+
+// ────────────────────────────────────────────── COLOR
+function getColorForName(name) {
+    if (data.assets.charColors && data.assets.charColors[name]) return data.assets.charColors[name];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return CHAR_COLORS[Math.abs(hash) % CHAR_COLORS.length];
+}
+function openColorPicker(charName) {
+    targetColorChar = charName;
+    document.getElementById('colorPickerTitle').innerText = `Color for ${charName}`;
+    const grid = document.getElementById('colorGrid');
+    grid.innerHTML = '';
+    const currentColor = getColorForName(charName);
+    document.getElementById('customHexInput').value = currentColor;
+    document.getElementById('nativePicker').value = currentColor;
+    CHAR_COLORS.forEach(c => {
+        const swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = c;
+        if (c.toLowerCase() === currentColor.toLowerCase()) swatch.classList.add('active');
+        swatch.onclick = () => applyCharColor(c);
+        grid.appendChild(swatch);
+    });
+    document.getElementById('colorPickerModal').style.display = 'flex';
+}
+function syncColorFromNative(val) { document.getElementById('customHexInput').value = val.toUpperCase(); }
+function syncColorFromText(val) { if(val.length === 7 && val.startsWith('#')) document.getElementById('nativePicker').value = val; }
+function applyCustomHex() {
+    let val = document.getElementById('customHexInput').value.trim();
+    if (!val.startsWith('#')) val = '#' + val;
+    if (/^#[0-9A-F]{6}$/i.test(val)) applyCharColor(val);
+    else alert("Invalid Hex Code. Use format #RRGGBB");
+}
+function applyCharColor(colorCode) {
+    if (!targetColorChar) return;
+    data.assets.charColors[targetColorChar] = colorCode;
+    save();
+    document.getElementById('colorPickerModal').style.display = 'none';
+    renderContent();
+    if(document.getElementById('assetModal').style.display !== 'none') renderAssetList();
+}
+
+// ────────────────────────────────────────────── NEW: SIMPLIFIED PARSER
+function openParserModal() {
+    document.getElementById('dropUpMenu').classList.remove('visible');
+    document.getElementById('parserInput').value = '';
+    document.getElementById('parserModal').style.display = 'flex';
+    setTimeout(() => document.getElementById('parserInput').focus(), 100);
+}
+
+function processParserInput() {
+    const rawText = document.getElementById('parserInput').value;
+    if (!rawText.trim()) return;
+
+    const rawLines = rawText.split(/\r?\n/);
+    const newBlock = [];
+
+    rawLines.forEach(line => {
+        let str = line.trim();
+        if(!str) return;
+
+        // NEW LOGIC: Just find the FIRST Colon
+        const firstColonIndex = str.indexOf(':');
+
+        if (firstColonIndex === -1) {
+            // No Colon? It's Action/Author
+            // Just strip leading numbers if they exist "1. The sun sets"
+            const text = str.replace(/^\d+[\.\)]\s*/, '');
+            newBlock.push({ c: 'AUTHOR', t: text });
+        } else {
+            // Colon Exists. Split text.
+            let namePart = str.substring(0, firstColonIndex).trim();
+            let textPart = str.substring(firstColonIndex + 1).trim();
+
+            // Strip numbers from Name part "5. Elizabeth" -> "Elizabeth"
+            namePart = namePart.replace(/^\d+[\.\)]\s*/, '').trim();
+
+            if (namePart.toUpperCase() === 'AUTHOR' || namePart.toUpperCase() === 'ACTION' || namePart === '') {
+                newBlock.push({ c: 'AUTHOR', t: textPart });
+            } else {
+                // It is a character (Worker 1, Grandma, etc.)
+                const finalName = namePart.toUpperCase();
+                addToAssetsIfNew('chars', finalName);
+                newBlock.push({ c: finalName, t: textPart });
+            }
+        }
+    });
+
+    if (newBlock.length > 0) {
+        const scene = data.scenes[curSceneIdx];
+        if (!scene.lines) scene.lines = [];
+        scene.lines.push(...newBlock);
+        
+        save();
+        renderContent();
+        
+        lastFocusedIndex = scene.lines.length - 1;
+        document.getElementById('parserModal').style.display = 'none';
+        setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 100);
+    } else {
+        alert("No valid lines found to parse.");
+    }
+}
+
+// ────────────────────────────────────────────── MENU & CLIPBOARD
+function toggleDropUp() {
+    const menu = document.getElementById('dropUpMenu');
+    if (menu.classList.contains('visible')) { menu.classList.remove('visible'); } 
+    else { renderDropUpItems(); menu.classList.add('visible'); }
+}
+
+function renderDropUpItems() {
+    const container = document.getElementById('menuListContent');
+    container.innerHTML = '';
+
+    // NEW PARSE BUTTON
+    const rowParse = document.createElement('div');
+    rowParse.className = 'menu-item special';
+    rowParse.innerHTML = `<span>📋 Parse / Batch Import</span>`;
+    rowParse.onclick = () => openParserModal();
+    container.appendChild(rowParse);
+
+    const rowAuthor = document.createElement('div');
+    rowAuthor.className = 'menu-item';
+    rowAuthor.innerHTML = `<span>AUTHOR (Action)</span>`;
+    rowAuthor.onclick = () => insertLine('AUTHOR');
+    container.appendChild(rowAuthor);
+
+    data.assets.chars.forEach(char => {
+        const row = document.createElement('div');
+        row.className = 'menu-item';
+        const col = getColorForName(char);
+        row.innerHTML = `<span style="color:${col}">${char}</span>`;
+        row.onclick = () => insertLine(char);
+        container.appendChild(row);
+    });
+
+    const rowManage = document.createElement('div');
+    rowManage.className = 'menu-item';
+    rowManage.style.borderTop = '1px solid #eee';
+    rowManage.style.color = 'var(--text-sub)';
+    rowManage.innerHTML = `<span>+ New Character</span> <span class="menu-item-gear">⚙️</span>`;
+    rowManage.onclick = () => { document.getElementById('dropUpMenu').classList.remove('visible'); manageAssets('chars', 'Characters'); }
+    container.appendChild(rowManage);
+}
+
+function insertLine(charName) {
+    document.getElementById('dropUpMenu').classList.remove('visible');
+    const scene = data.scenes[curSceneIdx];
+    if (!scene.lines) scene.lines = [];
+    const newLine = { c: charName, t: "" };
+    
+    // Logic: If user clicks a name, insert AFTER current focus, or at end
+    let insertIndex;
+    if (lastFocusedIndex >= 0 && lastFocusedIndex < scene.lines.length) {
+        insertIndex = lastFocusedIndex + 1;
+        scene.lines.splice(insertIndex, 0, newLine);
+    } else {
+        insertIndex = scene.lines.length;
+        scene.lines.push(newLine);
+    }
+    save();
+    renderContent();
+    // Focus new line
+    const rows = document.getElementById('scriptBody').children;
+    if (rows[insertIndex]) {
+        const inputDiv = rows[insertIndex].querySelector('.editor-input');
+        if (inputDiv) { inputDiv.focus(); inputDiv.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }
+    lastFocusedIndex = insertIndex;
+}
+
+function copySceneToClipboard() {
+    if (curSceneIdx < 0) return;
+    const s = data.scenes[curSceneIdx];
+    let txt = `SCENE ${curSceneIdx + 1}\n`;
+    if (s.name) txt += `NAME: ${s.name}\n`;
+    const tags = [];
+    if (s.loc) tags.push(`LOC:${s.loc}`); if (s.time) tags.push(`TIME:${s.time}`);
+    if (s.month) tags.push(`MON:${s.month}`); if (s.year) tags.push(`YR:${s.year}`);
+    if (s.clock) tags.push(`CLK:${s.clock}`);
+    if (tags.length) txt += `DETAILS: [${tags.join('] [')}]\n`;
+    txt += `\n`;
+    (s.lines || []).forEach(l => {
+        if (l.c === 'AUTHOR') txt += `AUTHOR: ${l.t}\n\n`; else txt += `${l.c}: ${l.t}\n\n`;
+    });
+    navigator.clipboard.writeText(txt).then(() => alert("Scene Copied!")).catch(err => alert("Copy failed."));
+}
+
+// ────────────────────────────────────────────── ASSET MANAGEMENT
+function manageAssets(k, title) {
+    currentManageKey = k;
+    document.getElementById('assetTitle').textContent = title;
+    const isChar = (k === 'chars');
+    document.getElementById('tapDotHint').style.display = isChar ? 'inline' : 'none';
+    document.getElementById('assetModal').style.display = 'flex';
+    document.getElementById('newAssetInput').value = ''; 
+    renderAssetList();
+}
+function closeAssetManager() {
+    const input = document.getElementById('newAssetInput');
+    const val = input.value.trim();
+    if (val) addNewAsset();
+    document.getElementById('assetModal').style.display = 'none';
+    refreshDropdowns(data.scenes[curSceneIdx]);
+}
+function renderAssetList() {
+    const container = document.getElementById('assetList');
+    container.innerHTML = '';
+    const isChar = (currentManageKey === 'chars');
+    const list = data.assets[currentManageKey];
+    list.forEach((v, i) => {
+        let leftContent = '';
+        if (isChar) {
+            const col = getColorForName(v);
+            leftContent += `<span class="char-dot-manage" style="background:${col}" onclick="event.stopPropagation(); openColorPicker('${v}')"></span>`;
+        }
+        leftContent += `<span class="asset-val" onclick="renameAsset(${i})">${v}</span>`;
+        container.innerHTML += `<div class="asset-item"><div class="asset-item-left">${leftContent}</div><div class="asset-right-actions"><button class="btn-reorder" onclick="moveAsset(${i}, -1)">↑</button><button class="btn-reorder" onclick="moveAsset(${i}, 1)">↓</button><button class="btn-del-asset" onclick="delAsset(${i})">×</button></div></div>`;
+    });
+}
+function moveAsset(index, direction) {
+    const list = data.assets[currentManageKey];
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= list.length) return;
+    [list[index], list[newIndex]] = [list[newIndex], list[index]];
+    save(); renderAssetList();
+}
+function addNewAsset() {
+    const input = document.getElementById('newAssetInput');
+    const v = input.value.trim().toUpperCase();
+    if (!v) return;
+    if (!data.assets[currentManageKey].includes(v)) {
+        data.assets[currentManageKey].push(v);
+        save(); renderAssetList();
+    }
+    input.value = ''; input.focus();
+}
+function delAsset(i) {
+    if (!confirm("Remove this item?")) return;
+    data.assets[currentManageKey].splice(i, 1);
+    save(); renderAssetList();
+}
+function renameAsset(idx) {
+    const oldVal = data.assets[currentManageKey][idx];
+    const newVal = prompt("Rename to:", oldVal)?.trim().toUpperCase();
+    if (!newVal || newVal === oldVal) return;
+    data.assets[currentManageKey][idx] = newVal;
+    if (currentManageKey === 'chars') {
+        let count = 0;
+        data.scenes.forEach(s => { (s.lines || []).forEach(l => { if (l.c === oldVal) { l.c = newVal; count++; } }); });
+        if (data.assets.charColors && data.assets.charColors[oldVal]) {
+            data.assets.charColors[newVal] = data.assets.charColors[oldVal];
+            delete data.assets.charColors[oldVal];
+        }
+        if (count > 0) alert(`Updated ${count} dialogue lines.`);
+    }
+    save(); renderAssetList(); renderContent();
+}
+function addToAssetsIfNew(key, val) {
+    const map = { loc:'loc', time:'time', mon:'month', yr:'year', clk:'clock', chars:'chars' };
+    const realKey = map[key] || key;
+    if (data.assets[realKey] && !data.assets[realKey].includes(val)) { data.assets[realKey].push(val); }
+}
+
+// ────────────────────────────────────────────── IMPORT/EXPORT
+function exportScript() {
+    let txt = `TITLE: ${data.title}\n${DIVIDER}\n\n`;
+    data.scenes.forEach((s, i) => {
+        txt += `SCENE ${i+1}\nNAME: ${s.name || ''}\n`;
+        const tags = [];
+        if (s.loc) tags.push(`LOC:${s.loc}`); if (s.time) tags.push(`TIME:${s.time}`);
+        if (s.month) tags.push(`MON:${s.month}`); if (s.year) tags.push(`YR:${s.year}`);
+        if (s.clock) tags.push(`CLK:${s.clock}`);
+        if (tags.length) txt += `DETAILS: [${tags.join('] [')}]\n`;
+        txt += `\n`;
+        (s.lines || []).forEach(l => { if (l.c === 'AUTHOR') txt += `AUTHOR: ${l.t}\n\n`; else txt += `${l.c}: ${l.t}\n\n`; });
+        txt += `${DIVIDER}\n\n`;
+    });
+    const blob = new Blob([txt], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${data.title.replace(/[^a-z0-9]/gi, '_') || 'script'}.txt`;
+    a.click();
+}
+function importScript(input) {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const text = e.target.result;
+            const titleMatch = text.match(/TITLE:\s*(.*)/i);
+            if (titleMatch) data.title = titleMatch[1].trim();
+            data.scenes = [];
+            const chunks = text.split(DIVIDER).slice(1);
+            chunks.forEach(chunk => {
+                const lines = chunk.trim().split('\n');
+                if (lines.length < 2) return;
+                let scene = getInheritedScene(null);
+                lines.forEach(line => {
+                    const t = line.trim();
+                    if (!t || t.startsWith('SCENE')) return;
+                    if (t.startsWith('NAME:')) scene.name = t.substring(5).trim();
+                    else if (t.startsWith('DETAILS:')) {
+                        const matches = t.match(/\[(.*?):(.*?)\]/g) || [];
+                        matches.forEach(m => {
+                            const [, k, v] = m.match(/\[(.+?):(.+?)\]/) || [];
+                            if (!k || !v) return;
+                            const key = k.trim().toLowerCase();
+                            addToAssetsIfNew(key, v.trim());
+                            if (key==='loc') scene.loc = v.trim(); if (key==='time') scene.time = v.trim();
+                            if (key==='mon') scene.month = v.trim(); if (key==='yr') scene.year = v.trim();
+                            if (key==='clk') scene.clock = v.trim();
+                        });
+                    }
+                    else if (t.startsWith('AUTHOR:') || t.startsWith('ACTION:')) scene.lines.push({ c:'AUTHOR', t: t.substring(7).trim() });
+                    else if (t.includes(':')) {
+                        const idx = t.indexOf(':');
+                        const char = t.substring(0, idx).trim();
+                        const text = t.substring(idx+1).trim();
+                        scene.lines.push({ c:char, t:text });
+                        addToAssetsIfNew('chars', char);
+                    }
+                });
+                if (scene.lines?.length > 0 || scene.name) data.scenes.push(scene);
+            });
+            save(); document.getElementById('projectTitle').value = data.title; renderHome(); alert('Imported successfully.');
+        } catch (err) { console.error(err); alert('Error parsing file.'); }
+    };
+    reader.readAsText(file); input.value = '';
+}
+function refreshDropdowns(s) {
+    ['loc','time','month','year','clock'].forEach(k => {
+        const id = 'in' + k.charAt(0).toUpperCase() + k.slice(1);
+        const el = document.getElementById(id);
+        el.innerHTML = '<option value="">Select...</option>';
+        data.assets[k].forEach(opt => { el.innerHTML += `<option value="${opt}" ${opt===s[k]?'selected':''}>${opt}</option>`; });
+    });
+}
+function saveMeta() {
+    const s = data.scenes[curSceneIdx];
+    s.name = document.getElementById('inName').value.trim();
+    ['loc','time','month','year','clock'].forEach(k => { const id = 'in' + k.charAt(0).toUpperCase() + k.slice(1); s[k] = document.getElementById(id).value.trim(); });
+    save(); renderContent();
+}
+function toggleMeta() { document.getElementById('metaDrawer').classList.toggle('visible'); }
+
+init();
+</script>
+</body>
+</html>
