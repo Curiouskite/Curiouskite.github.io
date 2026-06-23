@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0984e3">
+    <title>ChronoLog - Secure Cloud Daybook</title>
+
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://accounts.google.com/gsi/client" onload="initGoogle()" async defer></script>
+
+    <style>
+        :root {
+            --primary: #0984e3; --primary-light: rgba(9, 132, 227, 0.15);
+            --danger: #ff7675; --success: #00b894; --warning: #fdcb6e;
+            --text-main: #2d3436; --text-muted: #636e72;
+            --glass-bg: rgba(255, 255, 255, 0.55); --glass-border: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%); background-attachment: fixed; color: var(--text-main); height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* --- UI COMPONENTS --- */
+        .top-nav { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--glass-border); z-index: 100; }
+        .nav-center { display: flex; align-items: center; justify-content: center; flex: 1; flex-direction: column; }
+        .nav-title { font-size: 16px; font-weight: 700; color: var(--primary); min-width: 140px; text-align: center; }
+        
+        .sync-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 2px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        .sync-online { background: rgba(0, 184, 148, 0.15); color: var(--success); }
+        .sync-error { background: rgba(255, 118, 117, 0.15); color: var(--danger); animation: pulse 1.5s infinite; }
+        .sync-loading { background: rgba(253, 203, 110, 0.15); color: #d63031; }
+
+        @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+        .icon-btn { background: none; border: none; color: var(--primary); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 8px; border-radius: 50%; transition: background 0.2s; }
+        .icon-btn:hover { background: var(--primary-light); }
+        .icon-btn svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        
+        .glass-btn { background: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); color: var(--primary); font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 20px; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: all 0.2s; white-space: nowrap;}
+        .glass-btn:active { transform: scale(0.95); }
+        
+        .view-container { flex: 1; overflow-y: auto; padding: 16px; padding-bottom: 90px; display: none; }
+        .view-container.active { display: block; }
+
+        /* --- DASHBOARD: DATE CARDS --- */
+        .dash-toolbar { display: flex; gap: 10px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+        .dash-toolbar::-webkit-scrollbar { display: none; }
+        .date-card { background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: var(--glass-shadow); cursor: pointer; transition: transform 0.2s ease, opacity 0.2s; }
+        .date-card:active { transform: scale(0.98); }
+        .date-card.empty { opacity: 0.75; }
+        .date-card.empty .date-badge { background: #cbd5e1; color: #64748b; box-shadow: none; }
+        .date-card.today { border: 2px solid var(--primary); background: rgba(255,255,255,0.85); }
+        
+        .date-card-header { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: var(--text-main); display: flex; align-items: center; justify-content: space-between; }
+        .date-card-summary { display: flex; gap: 10px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap;}
+        .summary-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.6); padding: 4px 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.8); }
+
+        .date-badge { background: linear-gradient(135deg, var(--primary) 0%, #74b9ff 100%); color: white; border-radius: 16px; padding: 12px 10px; min-width: 80px; text-align: center; box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3); transition: background 0.3s; }
+
+        /* --- TIMELINE VIEW --- */
+        .timeline-wrapper { position: relative; padding-left: 20px; }
+        .timeline-line { position: absolute; left: 26px; top: 0; bottom: 0; width: 2px; background: rgba(9, 132, 227, 0.3); }
+        .stamp-item { position: relative; margin-bottom: 24px; padding-left: 30px;}
+        .stamp-dot { position: absolute; left: -2px; top: 4px; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); border: 3px solid #e0f2fe; z-index: 2; }
+        
+        .stamp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
+        .stamp-time { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+        .stamp-name { font-size: 12px; font-weight: 700; color: var(--primary); background: var(--primary-light); padding: 2px 8px; border-radius: 8px; user-select: none; cursor: pointer; transition: background 0.2s;}
+        .stamp-name:active { background: rgba(9, 132, 227, 0.3); }
+
+        .stamp-content { position: relative; background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 12px; padding: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .stamp-deleted { background: rgba(255, 118, 117, 0.1); border: 1px dashed var(--danger); color: var(--danger); font-size: 13px; font-weight: 600; padding: 12px; border-radius: 12px; display: flex; align-items: center; gap: 8px; }
+        
+        .stamp-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; padding-right: 24px; color: var(--text-main);}
+        .interactive-media { cursor: pointer; transition: opacity 0.2s; }
+        .interactive-media:hover { opacity: 0.9; }
+        .stamp-image { width: 100%; border-radius: 8px; object-fit: cover; max-height: 250px; display: block; border: 1px solid rgba(0,0,0,0.05);}
+        .stamp-table-wrapper { overflow: hidden; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); max-height: 200px; position: relative;}
+        .stamp-table-wrapper::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; background: linear-gradient(transparent, rgba(255,255,255,0.9)); pointer-events: none; }
+        .stamp-table { width: 100%; border-collapse: collapse; font-size: 12px; background: rgba(255,255,255,0.5); }
+        .stamp-table th, .stamp-table td { padding: 6px 8px; border: 1px solid rgba(0,0,0,0.05); text-align: left; white-space: nowrap; }
+        
+        .checklist-grid { display: flex; flex-direction: column; gap: 6px; }
+        .checklist-item { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.6); border-radius: 10px; border: 1px solid rgba(0,0,0,0.05); transition: background 0.2s; }
+        .checklist-item.done { background: var(--primary-light); opacity: 0.8; }
+        .checklist-item.done span.cl-text { text-decoration: line-through; color: var(--primary); font-weight: 600; }
+        .standard-task-item { font-size: 14px; padding: 10px 14px; }
+        .standard-task-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+        .class-task-item { font-size: 16px; padding: 16px 18px; background: rgba(255,255,255,0.9); box-shadow: 0 2px 8px rgba(0,0,0,0.02);}
+        .class-task-item input[type="checkbox"] { width: 24px; height: 24px; cursor: pointer; accent-color: var(--primary); }
+        
+        .clamped-content { max-height: 220px; overflow: hidden; position: relative; transition: max-height 0.3s ease; }
+        .clamped-content::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 60px; background: linear-gradient(transparent, rgba(255,255,255,1)); pointer-events: none; transition: opacity 0.3s; }
+        .clamped-content.expanded { max-height: 8000px; }
+        .clamped-content.expanded::after { opacity: 0; }
+        .show-more-btn { background: none; border: none; color: var(--primary); font-weight: 700; font-size: 13px; cursor: pointer; padding: 12px 0 0 0; display: flex; width: 100%; justify-content: center; align-items: center; gap: 6px; }
+        .show-more-btn svg { width: 16px; height: 16px; transition: transform 0.3s; stroke-width: 3;}
+        .show-more-btn.expanded svg { transform: rotate(180deg); }
+
+        .stamp-actions { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; z-index: 10;}
+        .action-mini-btn { background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.05); width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-muted); box-shadow: 0 2px 5px rgba(0,0,0,0.05); transition: background 0.2s;}
+        .action-mini-btn:active { background: rgba(0,0,0,0.05); }
+        .action-mini-btn.del { color: var(--danger); }
+        .action-mini-btn svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; }
+
+        /* --- MODALS & BOTTOM SHEETS --- */
+        .fab { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 28px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(9, 132, 227, 0.4); cursor: pointer; z-index: 1000; transition: transform 0.2s; }
+        .fab:active { transform: scale(0.9); }
+        .fab svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2.5; fill: none; }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 999; display: none; opacity: 0; transition: opacity 0.3s; }
+        .action-sheet { position: fixed; bottom: -100%; left: 0; width: 100%; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px); border-radius: 24px 24px 0 0; padding: 24px; z-index: 1000; transition: bottom 0.3s; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); }
+        .action-sheet.active { bottom: 0; }
+        .sheet-btn { width: 100%; padding: 14px; margin-bottom: 10px; border-radius: 12px; border: 1px solid var(--glass-border); background: rgba(9, 132, 227, 0.05); font-size: 15px; font-weight: 600; color: var(--text-main); cursor: pointer; display: flex; gap: 14px; align-items: center; }
+        .sheet-btn svg { width: 20px; height: 20px; stroke: var(--primary); stroke-width: 2; fill: none; }
+
+        .center-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 400px; background: rgba(255,255,255,0.95); backdrop-filter: blur(20px); border-radius: 20px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); z-index: 100001; }
+        .center-modal.active { display: block; }
+        .modal-btns { display: flex; gap: 10px; margin-top: 10px; }
+        .modal-btns button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn-cancel { background: #eee; color: #333; }
+        .btn-save { background: var(--primary); color: white; border: none; outline: none; cursor: pointer;}
+        .btn-danger { background: var(--danger); color: white; }
+        
+        .styled-input { width: 100%; border-radius: 12px; padding: 12px; border: 1px solid rgba(0,0,0,0.1); font-size: 14px; outline: none; font-family: inherit; box-sizing: border-box; background: white; margin-bottom: 12px; transition: border-color 0.2s;}
+        .styled-input:focus { border-color: var(--primary); }
+
+        .fs-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); z-index: 100000; display: none; flex-direction: column; opacity: 0; transition: opacity 0.3s; }
+        .fs-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .fs-body { flex: 1; padding: 20px; overflow: auto; display: flex; justify-content: center; }
+        .fs-body img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; }
+        .table-container { width: 100%; overflow: auto; background: white; border-radius: 12px; }
+        .table-container table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .table-container th, .table-container td { padding: 12px; border: 1px solid #eee; text-align: left; }
+
+        .locked-badge { background: var(--danger); color: white; border: none; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; display: flex; align-items: center; gap: 4px; cursor: pointer; box-shadow: 0 4px 10px rgba(255, 118, 117, 0.4); }
+        .read-only .fab { display: none !important; }
+        .read-only .stamp-actions { display: none !important; }
+        .read-only input[type="checkbox"] { pointer-events: none; opacity: 0.6; }
+        .read-only .stamp-name { pointer-events: none; }
+        .read-only .task-note-input { pointer-events: none; opacity: 0.8; }
+
+        .timetable-editor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 10px; }
+        .timetable-field { background: rgba(255,255,255,0.6); border: 1px solid rgba(0,0,0,0.05); padding: 8px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; }
+        .timetable-field label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+        .timetable-field input { border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; padding: 6px; font-size: 13px; outline: none; width: 100%; background: #fff; }
+        .timetable-field input:focus { border-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <div id="authOverlay" class="overlay" style="display:none; opacity:1; justify-content:center; align-items:center; z-index:999999; background: var(--glass-bg); backdrop-filter: blur(10px);">
+        <div style="background:white; padding: 30px; border-radius: 20px; text-align: center; box-shadow: var(--glass-shadow); max-width: 90%;">
+            <div style="background: rgba(9, 132, 227, 0.1); width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;">
+                <svg viewBox="0 0 24 24" width="30" height="30" stroke="var(--primary)" stroke-width="2" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            </div>
+            <h2 style="color:var(--primary); margin-bottom: 10px;">ChronoLog Auth</h2>
+            <p style="color:var(--text-muted); margin-bottom: 20px; font-size: 14px;">Securely sync and connect your daybook to your Google Drive.</p>
+            <button class="btn-save" style="padding: 12px 24px; font-size: 15px; border-radius: 12px; width: 100%; box-shadow: 0 4px 15px rgba(9, 132, 227, 0.3);" onclick="handleGoogleAuth()">Authorize & Connect</button>
+        </div>
+    </div>
+
+    <div class="top-nav">
+        <div style="width: 40px;">
+            <button class="icon-btn" id="backBtn" onclick="goHome()" style="display: none;">
+                <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+        </div>
+
+        <div class="nav-center">
+            <div id="monthScroller" style="display: flex; align-items: center;">
+                <button class="icon-btn" onclick="changeMonth(-1)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <div class="nav-title" id="navTitleMonth">June 2026</div>
+                <button class="icon-btn" onclick="changeMonth(1)"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="nav-title" id="navTitleDay" style="display: none;"></div>
+                <button class="locked-badge" id="lockBadge" style="display: none;" onclick="unlockDate()">🔒 Locked</button>
+            </div>
+            <div id="syncIndicator" class="sync-badge sync-online" onclick="retrySyncChain()">● Online Sync Active</div>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="icon-btn" id="settingsBtn" onclick="openSettings()">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="dashboardView" class="view-container active">
+        <div class="dash-toolbar">
+            <button class="glass-btn" onclick="openExportModal()">⬇️ Export Month (ZIP)</button>
+            <button class="glass-btn" onclick="document.getElementById('zipImport').click()">⬆️ Import (ZIP)</button>
+            <input type="file" id="zipImport" accept=".zip" style="display:none" onchange="importMonthZip(event)">
+        </div>
+        <div id="dashCards"></div>
+    </div>
+
+    <div id="settingsView" class="view-container">
+        <h2 style="color: var(--primary); margin-bottom: 20px; margin-left: 4px;">App Settings</h2>
+        
+        <div class="date-card" style="cursor: default; transform: none; box-shadow: var(--glass-shadow); border: 1px dashed var(--danger);">
+            <h3 style="color: var(--danger); margin-bottom: 12px; font-size: 18px; border-bottom: 1px solid rgba(255, 118, 117, 0.15); padding-bottom: 8px;">Recycle Bin</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Soft-deleted records wait here.</p>
+            <div id="binItemsContainer" style="max-height: 200px; overflow-y: auto; margin-bottom: 12px;"></div>
+            <button class="btn-danger" style="width: 100%; padding: 10px; border-radius: 12px;" onclick="emptyRecycleBin()">Empty Recycle Bin</button>
+        </div>
+
+        <div class="date-card" style="cursor: default; transform: none; box-shadow: var(--glass-shadow);">
+            <h3 style="color: var(--primary); margin-bottom: 16px; font-size: 18px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px;">Class Management</h3>
+            <div id="classesList"></div>
+            <div style="display:flex; gap:6px; margin-top:16px; flex-wrap: wrap; align-items: center;">
+                <input type="text" id="newClassInput" placeholder="Class Name (e.g. 10A)" class="styled-input" style="flex: 1; min-width: 140px; margin: 0; padding: 10px 12px;">
+                <button class="btn-save" style="padding: 10px 16px; border-radius: 12px;" onclick="addClass()">Add</button>
+                <button class="glass-btn" style="padding: 10px 12px; border-radius: 12px; font-size: 12px; margin: 0; box-sizing: border-box;" onclick="document.getElementById('jsonNameImport').click()" title="Import Classes via JSON">{ JSON }</button>
+            </div>
+            <input type="file" id="jsonNameImport" accept=".json" style="display:none" onchange="importClassesJSON(event)">
+        </div>
+
+        <div class="date-card" style="cursor: default; transform: none; box-shadow: var(--glass-shadow);">
+            <h3 style="color: var(--primary); margin-bottom: 12px; font-size: 18px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px;">Weekly Class Matrix</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">Select a weekday to adjust what classes you are teaching.</p>
+            <select id="timetableDaySelect" class="styled-input" style="margin-bottom: 14px;" onchange="renderTimetableEditorGrid()"></select>
+            <div id="timetableGridContainer" class="timetable-editor-grid"></div>
+            <div style="margin-top: 16px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
+                <label style="font-size: 12px; color: var(--text-muted); font-weight: bold; text-transform: uppercase; margin-bottom: 8px; display: block;">Saturday Timetable</label>
+                <select id="saturdaySelect" class="styled-input" style="margin-bottom: 0;" onchange="updateSaturdayTemplate(this.value)">
+                    <option value="Monday">Follow Monday</option>
+                    <option value="Tuesday">Follow Tuesday</option>
+                    <option value="Wednesday">Follow Wednesday</option>
+                    <option value="Thursday">Follow Thursday</option>
+                    <option value="Friday">Follow Friday</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="date-card" style="cursor: default; transform: none; box-shadow: var(--glass-shadow);">
+            <h3 style="color: var(--primary); margin-bottom: 16px; font-size: 18px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px;">Schedule & Periods</h3>
+            <div id="periodsList" style="max-height: 280px; overflow-y: auto; padding-right: 4px; margin-bottom: 12px;"></div>
+            <div style="display:flex; gap:6px; flex-wrap: wrap; align-items: center; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.05);">
+                <input type="text" id="newPeriodName" placeholder="Name (e.g. Break)" class="styled-input" style="flex: 2; min-width: 120px; margin: 0; padding: 10px;">
+                <div style="display: flex; gap: 6px; flex: 3; min-width: 160px;">
+                    <input type="time" id="newPeriodStart" class="styled-input" style="flex: 1; margin: 0; padding: 10px; font-size: 13px;">
+                    <input type="time" id="newPeriodEnd" class="styled-input" style="flex: 1; margin: 0; padding: 10px; font-size: 13px;">
+                </div>
+                <button class="btn-save" style="padding: 10px 16px; border-radius: 12px; width: 100%;" onclick="addPeriod()">Add Period</button>
+            </div>
+        </div>
+
+        <div class="date-card" style="cursor: default; transform: none; box-shadow: var(--glass-shadow);">
+            <h3 style="color: var(--primary); margin-bottom: 16px; font-size: 18px; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px;">Task Snippets</h3>
+            <div id="tasksList"></div>
+            <div style="display:flex; gap:8px; margin-top:16px;">
+                <input type="text" id="newTaskInput" placeholder="Task (e.g. Test)" class="styled-input" style="flex: 1; margin:0; padding: 10px 12px;">
+                <button class="btn-save" style="padding: 0 20px; border-radius: 12px;" onclick="addTask()">Add</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="timelineView" class="view-container">
+        <div class="timeline-wrapper" id="timelineContainer"></div>
+    </div>
+
+    <div class="fs-modal" id="fullscreenModal">
+        <div class="fs-header">
+            <div style="font-weight: 600; color: var(--primary);" id="fsTitle">Preview</div>
+            <button class="icon-btn" onclick="closeFullscreen()"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+        </div>
+        <div class="fs-body" id="fsBody"></div>
+    </div>
+
+    <div class="fab" id="mainFab" onclick="toggleActionSheet()" style="display:none;"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
+
+    <div class="overlay" id="sheetOverlay" onclick="toggleActionSheet()"></div>
+    <div class="action-sheet" id="actionSheet">
+        <h3 style="margin-bottom: 16px; color: var(--text-main);">Add Stamp</h3>
+        <button class="sheet-btn" onclick="pasteRecord()"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg> Paste Copied Log</button>
+        <button class="sheet-btn" onclick="openClassActionModal()"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> 📚 Class Task</button>
+        <button class="sheet-btn" onclick="openTextModal()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Write Note</button>
+        <button class="sheet-btn" onclick="openChecklistModal()"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Custom Checklist</button>
+        <button class="sheet-btn" onclick="document.getElementById('imageInput').click()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Import Image</button>
+        <button class="sheet-btn" onclick="document.getElementById('docInput').click()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg> Import Document (CSV/Excel/PDF)</button>
+        
+        <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="handleFileImport(event, 'image')">
+        <input type="file" id="docInput" accept=".csv,.xlsx,.pdf" style="display:none" onchange="handleFileImport(event, 'doc')">
+    </div>
+
+    <div class="overlay" id="dialogOverlay" style="z-index: 100000;"></div>
+    
+    <div class="center-modal" id="sysDialog">
+        <h3 id="sysDialogTitle" style="color: var(--primary);">Title</h3>
+        <p id="sysDialogMessage" style="color: var(--text-muted); margin-bottom: 16px; font-size: 14px; line-height: 1.4;">Message</p>
+        <input type="text" id="sysDialogInput" class="styled-input" style="display: none; text-align: center;">
+        <div class="modal-btns">
+            <button class="btn-cancel" id="sysDialogCancel">Cancel</button>
+            <button class="btn-save" id="sysDialogConfirm">Confirm</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="deleteChoiceDialog" style="z-index: 100002;">
+        <h3 style="color: var(--danger); display: flex; align-items: center; gap: 8px;">
+            ⚠️ Delete Log
+        </h3>
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 14px; line-height: 1.4;">
+            Moving to Recycle Bin allows you to restore the log text later. <b>Permanent Delete</b> will also delete the associated media file from your Google Drive.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button class="btn-save" id="deleteChoiceBinBtn" style="background: var(--primary);">Move to App Recycle Bin</button>
+            <button class="btn-danger" id="deleteChoicePermBtn">Permanently Delete File</button>
+            <button class="btn-cancel" onclick="UI.closeAll()" style="padding:10px;">Cancel</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="classActionModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);">Generate Class Task</h3>
+        <select id="classSelect" class="styled-input"></select>
+        <select id="taskSelect" class="styled-input"></select>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="UI.closeAll()">Cancel</button>
+            <button class="btn-save" onclick="createClassChecklist()">Create Roster</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="studentsModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);" id="studentsModalTitle">Edit Students</h3>
+        <div id="studentsList" style="margin-bottom: 10px; max-height: 250px; overflow-y:auto; padding-right: 4px;"></div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="newStudentInput" placeholder="Student name (or comma sep)" class="styled-input" style="margin: 0; flex: 1;" onkeypress="if(event.key==='Enter') addStudent()">
+            <button class="btn-save" onclick="addStudent()" style="padding: 0 16px; border-radius: 12px;">+</button>
+        </div>
+        <div class="modal-btns">
+            <button class="btn-cancel" style="width:100%" onclick="UI.closeAll()">Done</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="textModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);" id="textModalTitle">Timeline Note</h3>
+        <textarea id="noteInput" class="styled-input" style="height: 100px;" placeholder="Type here..."></textarea>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="UI.closeAll()">Cancel</button>
+            <button class="btn-save" onclick="saveTextNote()">Stamp</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="renameModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);">Rename Stamp</h3>
+        <input type="text" id="renameInput" class="styled-input" placeholder="Custom Name" onkeypress="if(event.key==='Enter') saveRename()">
+        <input type="hidden" id="renameTargetId">
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="UI.closeAll()">Cancel</button>
+            <button class="btn-save" onclick="saveRename()">Rename</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="checklistModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);">New Checklist</h3>
+        <div id="checkItemsList" style="margin-bottom: 10px; max-height: 150px; overflow-y:auto;"></div>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="newCheckItem" class="styled-input" placeholder="Add task..." style="margin: 0; flex: 1;" onkeypress="if(event.key==='Enter') addCheckItemUI()">
+            <button class="btn-save" onclick="addCheckItemUI()" style="padding: 0 16px; border-radius: 12px;">+</button>
+        </div>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="UI.closeAll()">Cancel</button>
+            <button class="btn-save" onclick="saveChecklist()">Create List</button>
+        </div>
+    </div>
+
+    <div class="center-modal" id="exportModal">
+        <h3 style="margin-bottom: 12px; color: var(--primary);">Export Month Data</h3>
+        <label style="font-weight:700; font-size: 13px; color: var(--text-muted); text-transform: uppercase;">1. Data Types</label>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom: 12px; margin-top: 6px; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.05);">
+            <label style="font-size: 14px; display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="exp-type-cb" value="text" checked> Notes</label>
+            <label style="font-size: 14px; display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="exp-type-cb" value="image" checked> Images</label>
+            <label style="font-size: 14px; display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="exp-type-cb" value="csv" checked> Excel/CSV</label>
+            <label style="font-size: 14px; display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="exp-type-cb" value="pdf" checked> PDFs</label>
+            <label style="font-size: 14px; display: flex; align-items: center; gap: 4px; cursor: pointer;"><input type="checkbox" class="exp-type-cb" value="checklist" checked> Tasks</label>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-weight:700; font-size: 13px; color: var(--text-muted); text-transform: uppercase;">2. Filter Classes</label>
+            <div style="display:flex; gap: 4px;">
+                <button class="glass-btn" style="padding: 4px 8px; font-size: 10px; min-height: 0;" onclick="document.querySelectorAll('.exp-class-cb, #expClassNone').forEach(cb => cb.checked = true)">All</button>
+                <button class="glass-btn" style="padding: 4px 8px; font-size: 10px; min-height: 0;" onclick="document.querySelectorAll('.exp-class-cb, #expClassNone').forEach(cb => cb.checked = false)">None</button>
+            </div>
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom: 16px; max-height: 180px; overflow-y:auto; background: rgba(0,0,0,0.02); padding: 10px; border-radius: 12px; border: 1px solid rgba(0,0,0,0.05);" id="exportClassesList"></div>
+        <div class="modal-btns">
+            <button class="btn-cancel" onclick="UI.closeAll()">Cancel</button>
+            <button class="btn-save" onclick="processExportMonthZip()">Export ZIP</button>
+        </div>
+    </div>
+
+<script>
+    // --- GOOGLE DRIVE ENGINE CONFIGURATION ---
+    const GOOGLE_CLIENT_ID = "491213598703-aqg336vpatu8tnvbjbcrgu7jp0vde6nq.apps.googleusercontent.com";
+    const SCOPES = "https://www.googleapis.com/auth/drive.file";
+    const AUTH_PASS = "7904"; // Local readonly app lock
+
+    // Google API tokens
+    let tokenClient;
+    let driveAccessToken = null;
+
+    // Global in-memory storage context
+    let ChronoDB = {}; // Now loaded selectively by month
+    let ChronoSettings = {};
+    let cloudMetadata = {}; // Tracks fileIds and modifiedTimes for 60s background sync
+
+    let activeDateStr = null; 
+    let currentViewMonth = new Date(); 
+    let unlockedDates = {}; 
+    let syncQueue = []; 
+    let isCurrentlySyncing = false;
+
+    // Helper: generate key for current month (e.g. "2026_06")
+    function getCurrentMonthKey() {
+        return `${currentViewMonth.getFullYear()}_${String(currentViewMonth.getMonth()+1).padStart(2,'0')}`;
+    }
+
+    // --- CUSTOM UI ENGINE ---
+    const UI = {
+        overlay: document.getElementById('dialogOverlay'),
+        closeAll: () => {
+            document.querySelectorAll('.center-modal').forEach(m => m.classList.remove('active'));
+            UI.overlay.style.opacity = '0';
+            setTimeout(() => UI.overlay.style.display = 'none', 200);
+        },
+        _show: (id) => {
+            UI.overlay.style.display = 'block';
+            setTimeout(() => { UI.overlay.style.opacity = '1'; document.getElementById(id).classList.add('active'); }, 10);
+        },
+        alert: (msg, title="Notification") => {
+            return new Promise(resolve => {
+                document.getElementById('sysDialogTitle').innerHTML = title;
+                document.getElementById('sysDialogMessage').innerHTML = msg;
+                document.getElementById('sysDialogInput').style.display = 'none';
+                document.getElementById('sysDialogCancel').style.display = 'none';
+                UI._show('sysDialog');
+                document.getElementById('sysDialogConfirm').onclick = () => { UI.closeAll(); resolve(); };
+            });
+        },
+        confirm: (msg, title="Confirm Action") => {
+            return new Promise(resolve => {
+                document.getElementById('sysDialogTitle').innerHTML = title;
+                document.getElementById('sysDialogMessage').innerHTML = msg;
+                document.getElementById('sysDialogInput').style.display = 'none';
+                document.getElementById('sysDialogCancel').style.display = 'flex';
+                UI._show('sysDialog');
+                document.getElementById('sysDialogConfirm').onclick = () => { UI.closeAll(); resolve(true); };
+                document.getElementById('sysDialogCancel').onclick = () => { UI.closeAll(); resolve(false); };
+            });
+        },
+        prompt: (msg, title="Input Required", type="text", defaultVal="") => {
+            return new Promise(resolve => {
+                document.getElementById('sysDialogTitle').innerHTML = title;
+                document.getElementById('sysDialogMessage').innerHTML = msg;
+                let inp = document.getElementById('sysDialogInput');
+                inp.style.display = 'block'; inp.type = type; inp.value = defaultVal;
+                document.getElementById('sysDialogCancel').style.display = 'flex';
+                UI._show('sysDialog');
+                setTimeout(() => inp.focus(), 150);
+                document.getElementById('sysDialogConfirm').onclick = () => { UI.closeAll(); resolve(inp.value); };
+                document.getElementById('sysDialogCancel').onclick = () => { UI.closeAll(); resolve(null); };
+            });
+        }
+    };
+
+    // --- GOOGLE DRIVE AUTHENTICATION & SYNCHRONIZATION PIPELINE ---
+    function initGoogle() {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: SCOPES,
+            callback: async (tokenResponse) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                    driveAccessToken = tokenResponse.access_token;
+                    document.getElementById('authOverlay').style.display = 'none';
+                    await initCloudData();
+                    // Start 60-second seamless background ping
+                    setInterval(backgroundSyncPing, 60000); 
+                }
+            },
+        });
+    }
+
+    function handleGoogleAuth() {
+        if (!driveAccessToken) {
+            tokenClient.requestAccessToken({prompt: 'consent'});
+        }
+    }
+
+    async function authorizedFetch(url, options = {}) {
+        if (!options.headers) options.headers = {};
+        options.headers['Authorization'] = `Bearer ${driveAccessToken}`;
+        let response = await fetch(url, options);
+        if (response.status === 401) {
+            document.getElementById('authOverlay').style.display = 'flex';
+            throw new Error("Authentication Token Expired. User needs to reauthorize.");
+        }
+        return response;
+    }
+
+    async function loadDriveJSONFile(filename, fallbackDefault) {
+        try {
+            updateSyncIndicator('loading', 'Fetching Drive Data...');
+            let queryUrl = `https://www.googleapis.com/drive/v3/files?q=name='${filename}.json' and trashed=false&fields=files(id,modifiedTime)`;
+            const searchRes = await authorizedFetch(queryUrl);
+            const searchData = await searchRes.json();
+
+            if (searchData.files && searchData.files.length > 0) {
+                const fileMeta = searchData.files[0];
+                const contentRes = await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileMeta.id}?alt=media`);
+                const payload = await contentRes.json();
+                
+                cloudMetadata[filename] = { id: fileMeta.id, modifiedTime: fileMeta.modifiedTime };
+                updateSyncIndicator('online', 'Drive Sync Active');
+                return payload;
+            }
+            updateSyncIndicator('online', 'Drive Sync Active');
+            return fallbackDefault;
+        } catch (error) {
+            console.warn(`Drive fetch failed for ${filename}, using default topology.`, error);
+            updateSyncIndicator('online', 'Drive Sync Active'); 
+            return fallbackDefault;
+        }
+    }
+
+    async function pushToCloudPayload(filename, dataObject) {
+        syncQueue.push({ filename: filename, data: JSON.parse(JSON.stringify(dataObject)) });
+        await processSyncChain();
+    }
+
+    async function processSyncChain() {
+        if (isCurrentlySyncing || syncQueue.length === 0) return;
+        isCurrentlySyncing = true;
+        
+        const currentPayload = syncQueue[0];
+        updateSyncIndicator('loading', 'Updating Drive Matrices...');
+
+        try {
+            const filename = currentPayload.filename;
+            let fileId = cloudMetadata[filename]?.id;
+
+            if (!fileId) {
+                // If not in cache, check if exists remote
+                let searchRes = await authorizedFetch(`https://www.googleapis.com/drive/v3/files?q=name='${filename}.json' and trashed=false`);
+                let searchData = await searchRes.json();
+                if (searchData.files && searchData.files.length > 0) {
+                    fileId = searchData.files[0].id;
+                } else {
+                    // Create metadata if file completely doesn't exist
+                    let metaRes = await authorizedFetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: filename + '.json', mimeType: 'application/json' })
+                    });
+                    fileId = (await metaRes.json()).id;
+                }
+            }
+
+            // Upload content via PATCH media upload endpoint
+            let uploadRes = await authorizedFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentPayload.data)
+            });
+
+            if (!uploadRes.ok) throw new Error("Drive engine rejected package packets.");
+            
+            // Get the newly assigned modifiedTime to prevent unnecessary pulling later
+            let verifyMeta = await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime`);
+            let verifyJson = await verifyMeta.json();
+            cloudMetadata[filename] = { id: fileId, modifiedTime: verifyJson.modifiedTime };
+
+            syncQueue.shift(); 
+            updateSyncIndicator('online', 'Drive Sync Active');
+            isCurrentlySyncing = false;
+            
+            if (syncQueue.length > 0) await processSyncChain();
+        } catch (error) {
+            console.error("Drive engine sync failure:", error);
+            updateSyncIndicator('error', 'Sync Failed - Click to Retry');
+            isCurrentlySyncing = false;
+        }
+    }
+
+    async function backgroundSyncPing() {
+        if(!driveAccessToken || isCurrentlySyncing || syncQueue.length > 0) return;
+        
+        try {
+            // Check specifically for updates to settings and current active month to minimize bandwidth
+            let mKey = getCurrentMonthKey();
+            let query = `name='chronolog_settings.json' or name='chronolog_data_${mKey}.json'`;
+            let res = await authorizedFetch(`https://www.googleapis.com/drive/v3/files?q=(${query}) and trashed=false&fields=files(id,name,modifiedTime)`);
+            let data = await res.json();
+            
+            let needsRefresh = false;
+            for (let f of data.files) {
+                let fname = f.name.replace('.json', '');
+                let localMeta = cloudMetadata[fname];
+                
+                // If remote is newer than local tracked version, pull updates seamlessly
+                if (!localMeta || new Date(f.modifiedTime) > new Date(localMeta.modifiedTime)) {
+                    if (fname === 'chronolog_settings') {
+                        let contentRes = await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+                        ChronoSettings = await contentRes.json();
+                    } else if (fname === `chronolog_data_${mKey}`) {
+                        let contentRes = await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+                        let monthDb = await contentRes.json();
+                        // Merge selective month
+                        for(let dateKey in ChronoDB) { if(dateKey.startsWith(mKey.replace('_','-'))) delete ChronoDB[dateKey]; }
+                        Object.assign(ChronoDB, monthDb);
+                    }
+                    cloudMetadata[fname] = { id: f.id, modifiedTime: f.modifiedTime };
+                    needsRefresh = true;
+                }
+            }
+            if (needsRefresh) {
+                renderDashboard();
+                if(activeDateStr) renderTimeline();
+                if(document.getElementById('settingsView').classList.contains('active')) renderSettings();
+            }
+        } catch (e) {
+            console.error("Seamless sync ping skipped this cycle", e);
+        }
+    }
+
+    function updateSyncIndicator(state, message) {
+        const ind = document.getElementById('syncIndicator');
+        ind.className = `sync-badge sync-${state}`;
+        ind.innerText = `● ${message}`;
+    }
+
+    async function retrySyncChain() {
+        if (syncQueue.length > 0) {
+            await processSyncChain();
+        } else {
+            updateSyncIndicator('loading', 'Validating Connections...');
+            await initCloudData();
+        }
+    }
+
+    async function uploadMediaFileToCloud(fileBlob) {
+        try {
+            updateSyncIndicator('loading', 'Uploading Media to Drive...');
+            let metadataRes = await authorizedFetch('https://www.googleapis.com/drive/v3/files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: fileBlob.name || 'Chronolog_Media', mimeType: fileBlob.type })
+            });
+            let fileId = (await metadataRes.json()).id;
+
+            await authorizedFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': fileBlob.type },
+                body: fileBlob
+            });
+
+            await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: 'reader', type: 'anyone' })
+            });
+
+            updateSyncIndicator('online', 'Drive Sync Active');
+            return `https://drive.google.com/uc?id=${fileId}`;
+        } catch(e) {
+            updateSyncIndicator('error', 'Media Upload Core Error');
+            throw e;
+        }
+    }
+
+    // --- APPLICATION STARTUP SEQUENCE ---
+    async function initCloudData() {
+        const defaultSettings = {
+            tasks: ["Homework", "Test", "Attendance"],
+            classes: [], saturdayTemplate: "Monday",
+            periods: [
+                {name: "Period 1", start: "09:15", end: "10:00"}, {name: "Period 2", start: "10:00", end: "10:40"},
+                {name: "Snack", start: "10:40", end: "10:55"}, {name: "Period 3", start: "10:55", end: "11:35"},
+                {name: "Lunch", start: "12:15", end: "13:00"}, {name: "Period 5", start: "13:00", end: "13:40"}
+            ],
+            weeklyTimetable: { "Monday": {}, "Tuesday": {}, "Wednesday": {}, "Thursday": {}, "Friday": {} },
+            recycleBin: []
+        };
+
+        ChronoSettings = await loadDriveJSONFile("chronolog_settings", defaultSettings);
+        if(!ChronoSettings.recycleBin) ChronoSettings.recycleBin = [];
+        
+        await loadActiveMonthFromCloud();
+    }
+
+    // Selective pulling wrapper
+    async function loadActiveMonthFromCloud() {
+        let mKey = getCurrentMonthKey();
+        let currentMonthData = await loadDriveJSONFile(`chronolog_data_${mKey}`, {});
+        
+        // Clear old month dates from memory to keep it fast
+        let filterPrefix = mKey.replace('_', '-'); 
+        for(let dateKey in ChronoDB) {
+            if(dateKey.startsWith(filterPrefix)) delete ChronoDB[dateKey];
+        }
+        Object.assign(ChronoDB, currentMonthData);
+        renderDashboard();
+    }
+
+    function saveSettings() { pushToCloudPayload("chronolog_settings", ChronoSettings); }
+    
+    function saveDB() { 
+        let mKey = getCurrentMonthKey();
+        let mPrefix = mKey.replace('_', '-');
+        let monthData = {};
+        for(let k in ChronoDB) {
+            if(k.startsWith(mPrefix)) monthData[k] = ChronoDB[k];
+        }
+        pushToCloudPayload(`chronolog_data_${mKey}`, monthData); 
+    }
+
+    // --- UTILITIES, CHRONOLOGICAL DATES & SECURITY PRESETS ---
+    const getTodayStr = () => { let d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+
+    function formatTime24to12(time24) {
+        let [h, m] = time24.split(':'); h = parseInt(h, 10);
+        let ampm = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+        return `${h}:${m} ${ampm}`;
+    }
+
+    function timeToMinutes(timeStr) {
+        let isPM = timeStr.toUpperCase().includes('PM'); let isAM = timeStr.toUpperCase().includes('AM');
+        let timePart = timeStr.replace(/(AM|PM)/i, '').trim(); let [h, m] = timePart.split(':').map(Number);
+        if (isPM && h !== 12) h += 12; if (isAM && h === 12) h = 0;
+        return h * 60 + (m || 0);
+    }
+
+    function getPeriodForRecord(timeStr) {
+        let recordMins = timeToMinutes(timeStr);
+        for(let p of ChronoSettings.periods) {
+            let startMins = timeToMinutes(p.start); let endMins = timeToMinutes(p.end);
+            if(recordMins >= startMins && recordMins < endMins) return p.name;
+        }
+        return null;
+    }
+
+    function getClassForDayAndPeriod(dateStr, periodName) {
+        if(!periodName) return null;
+        let dObj = new Date(dateStr + "T12:00:00"); if(isNaN(dObj)) return null; 
+        let dayName = dObj.toLocaleDateString('en-US', { weekday: 'long' });
+        if(dayName === "Saturday") dayName = ChronoSettings.saturdayTemplate || "Monday";
+
+        if(ChronoSettings.weeklyTimetable[dayName] && ChronoSettings.weeklyTimetable[dayName][periodName]) {
+            return ChronoSettings.weeklyTimetable[dayName][periodName];
+        }
+        return null;
+    }
+
+    function isDateLocked(dateStr) {
+        if (unlockedDates[dateStr]) return false;
+        if (dateStr === getTodayStr()) return false;
+        let isMonthly = dateStr.endsWith('-MONTHLY');
+        let currentMonthPrefix = getTodayStr().slice(0, 7);
+        if (isMonthly && dateStr.startsWith(currentMonthPrefix)) return false; 
+        return true;
+    }
+
+    async function unlockDate() {
+        let pass = await UI.prompt("Logs outside today are Read-Only. Enter password to unlock editing:", "Security Lock", "password");
+        if(pass === AUTH_PASS) {
+            unlockedDates[activeDateStr] = true; renderTimeline();
+            document.getElementById('timelineContainer').classList.remove('read-only');
+            document.getElementById('lockBadge').style.display = 'none';
+            document.getElementById('mainFab').style.display = 'flex';
+        } else if (pass !== null && pass !== "") { 
+            await UI.alert("Incorrect Password.", "Access Denied"); 
+        }
+    }
+
+    // --- APPLICATION NAVIGATION MANAGEMENT ---
+    function updateMonthTitle() { document.getElementById('navTitleMonth').innerText = currentViewMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); }
+
+    async function changeMonth(offset) {
+        let target = new Date(currentViewMonth); target.setMonth(target.getMonth() + offset);
+        currentViewMonth = target; updateMonthTitle(); 
+        await loadActiveMonthFromCloud(); // Selective pulling fetches data dynamically on traverse
+    }
+
+    function goHome() {
+        activeDateStr = null;
+        document.getElementById('dashboardView').classList.add('active');
+        document.getElementById('timelineView').classList.remove('active');
+        document.getElementById('settingsView').classList.remove('active');
+        document.getElementById('timelineContainer').classList.remove('read-only');
+        document.getElementById('backBtn').style.display = 'none';
+        document.getElementById('monthScroller').style.display = 'flex';
+        document.getElementById('navTitleDay').style.display = 'none';
+        document.getElementById('lockBadge').style.display = 'none';
+        document.getElementById('settingsBtn').style.display = 'flex';
+        document.getElementById('mainFab').style.display = 'none'; 
+        updateMonthTitle(); renderDashboard();
+    }
+
+    function openTimeline(dateStr) {
+        activeDateStr = dateStr; let locked = isDateLocked(dateStr); let isMonthly = dateStr.endsWith('-MONTHLY');
+        document.getElementById('dashboardView').classList.remove('active');
+        document.getElementById('settingsView').classList.remove('active');
+        document.getElementById('timelineView').classList.add('active');
+        document.getElementById('backBtn').style.display = 'flex';
+        document.getElementById('monthScroller').style.display = 'none';
+        document.getElementById('settingsBtn').style.display = 'none';
+        document.getElementById('navTitleDay').style.display = 'block';
+        
+        if (isMonthly) {
+            let [yyyy, mm] = dateStr.split('-'); let dObj = new Date(yyyy, parseInt(mm)-1, 1);
+            document.getElementById('navTitleDay').innerText = dObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + " General Log";
+        } else {
+            let dObj = new Date(dateStr + "T12:00:00");
+            document.getElementById('navTitleDay').innerText = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        }
+        
+        if(locked) {
+            document.getElementById('timelineContainer').classList.add('read-only');
+            document.getElementById('lockBadge').style.display = 'flex';
+            document.getElementById('mainFab').style.display = 'none';
+        } else {
+            document.getElementById('timelineContainer').classList.remove('read-only');
+            document.getElementById('lockBadge').style.display = 'none';
+            document.getElementById('mainFab').style.display = 'flex';
+        }
+        renderTimeline();
+    }
+
+    function openSettings() {
+        document.getElementById('dashboardView').classList.remove('active');
+        document.getElementById('timelineView').classList.remove('active');
+        document.getElementById('settingsView').classList.add('active');
+        document.getElementById('backBtn').style.display = 'flex';
+        document.getElementById('monthScroller').style.display = 'none';
+        document.getElementById('navTitleDay').style.display = 'block';
+        document.getElementById('navTitleDay').innerText = "Settings";
+        document.getElementById('lockBadge').style.display = 'none';
+        document.getElementById('settingsBtn').style.display = 'none';
+        document.getElementById('mainFab').style.display = 'none';
+        
+        const daySelect = document.getElementById('timetableDaySelect');
+        const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        daySelect.innerHTML = weekdays.map(d => `<option value="${d}">${d}</option>`).join('');
+        document.getElementById('saturdaySelect').value = ChronoSettings.saturdayTemplate || "Monday";
+
+        renderSettings(); renderTimetableEditorGrid(); renderRecycleBinUI();
+    }
+
+    // --- LOG DELETION ENGINE ---
+    function deleteRecordPrompt(id) {
+        UI._show('deleteChoiceDialog');
+        
+        // Soft delete
+        document.getElementById('deleteChoiceBinBtn').onclick = () => {
+            let recordIndex = ChronoDB[activeDateStr].findIndex(r => r.id === id);
+            if(recordIndex !== -1) {
+                let rec = ChronoDB[activeDateStr][recordIndex];
+                rec.isDeleted = true;
+                ChronoSettings.recycleBin.push({ purgedFromDate: activeDateStr, stampData: JSON.parse(JSON.stringify(rec)) });
+                rec.content = null; 
+                saveDB(); saveSettings(); renderTimeline();
+            }
+            UI.closeAll();
+        };
+
+        // Permanent True File Drive Deletion
+        document.getElementById('deleteChoicePermBtn').onclick = async () => {
+            UI.closeAll();
+            let recordIndex = ChronoDB[activeDateStr].findIndex(r => r.id === id);
+            if (recordIndex !== -1) {
+                let rec = ChronoDB[activeDateStr][recordIndex];
+                // Destroy remote media if applicable
+                if (rec.type === 'image' || rec.type === 'pdf') {
+                    try {
+                        let fileId = new URL(rec.content).searchParams.get('id');
+                        if (fileId) {
+                            updateSyncIndicator('loading', 'Deleting Remote Drive File...');
+                            await authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, { method: 'DELETE' });
+                            updateSyncIndicator('online', 'Drive Sync Active');
+                        }
+                    } catch(e) { console.error("True Drive deletion execution bypassed.", e); }
+                }
+                ChronoDB[activeDateStr].splice(recordIndex, 1);
+                saveDB(); renderTimeline();
+            }
+        };
+    }
+
+    function renderRecycleBinUI() {
+        const container = document.getElementById('binItemsContainer');
+        if(!ChronoSettings.recycleBin || ChronoSettings.recycleBin.length === 0) {
+            container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); font-style:italic;">Bin is empty.</p>`;
+            return;
+        }
+        container.innerHTML = ChronoSettings.recycleBin.map((item, idx) => `
+            <div style="background:rgba(255,255,255,0.7); border:1px solid rgba(0,0,0,0.05); padding:8px 12px; border-radius:10px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; font-size:13px;">
+                <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px;">
+                    <b>${escapeHtml(item.stampData.customName)}</b> <span style="color:var(--text-muted); font-size:11px;">(${item.purgedFromDate})</span>
+                </div>
+                <button class="action-mini-btn" style="color:var(--primary); background:none; border:none;" onclick="restoreBinItem(${idx})" title="Restore Item">🔄</button>
+            </div>
+        `).join('');
+    }
+
+    function restoreBinItem(index) {
+        let binned = ChronoSettings.recycleBin[index];
+        if(binned) {
+            let dateStr = binned.purgedFromDate;
+            if(!ChronoDB[dateStr]) ChronoDB[dateStr] = [];
+            
+            let insideRef = ChronoDB[dateStr].find(r => r.id === binned.stampData.id);
+            if(insideRef) {
+                insideRef.isDeleted = false;
+                insideRef.content = binned.stampData.content || "Restored matrix sequence notes.";
+            } else {
+                binned.stampData.isDeleted = false;
+                ChronoDB[dateStr].push(binned.stampData);
+            }
+            ChronoSettings.recycleBin.splice(index, 1);
+            saveDB(); saveSettings(); renderRecycleBinUI();
+            alert("Record package restored into sequence metrics successfully.");
+        }
+    }
+
+    async function emptyRecycleBin() {
+        if(!ChronoSettings.recycleBin || ChronoSettings.recycleBin.length === 0) return;
+        if(await UI.confirm("Permanently destroy all soft-deleted records here? (Drive media is not wiped this way)")) {
+            ChronoSettings.recycleBin = [];
+            saveSettings(); renderRecycleBinUI();
+        }
+    }
+
+    // --- CLASS TIMETABLE MATRIX LAYOUT RENDERING ---
+    function renderTimetableEditorGrid() {
+        let day = document.getElementById('timetableDaySelect').value;
+        let container = document.getElementById('timetableGridContainer');
+        container.innerHTML = "";
+        for(let i = 1; i <= 8; i++) {
+            let pKey = `Period ${i}`;
+            let currentVal = (ChronoSettings.weeklyTimetable[day] && ChronoSettings.weeklyTimetable[day][pKey]) ? ChronoSettings.weeklyTimetable[day][pKey] : "";
+            container.innerHTML += `
+                <div class="timetable-field"> <label>Period ${i}</label>
+                    <input type="text" value="${escapeHtml(currentVal)}" oninput="updateTimetableCell('${day}', '${pKey}', this.value)" placeholder="e.g. Free Block">
+                </div>`;
+        }
+    }
+
+    function updateTimetableCell(day, periodKey, value) {
+        if(!ChronoSettings.weeklyTimetable[day]) ChronoSettings.weeklyTimetable[day] = {};
+        ChronoSettings.weeklyTimetable[day][periodKey] = value.trim(); saveSettings();
+    }
+
+    function updateSaturdayTemplate(val) { ChronoSettings.saturdayTemplate = val; saveSettings(); }
+
+    function renderSettings() {
+        const tList = document.getElementById('tasksList');
+        tList.innerHTML = ChronoSettings.tasks.map((t, i) => `
+            <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: var(--text-main);">${escapeHtml(t)}</span>
+                <div style="display:flex; gap:8px;">
+                    <button class="action-mini-btn" onclick="editTask(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                    <button class="action-mini-btn del" onclick="deleteTask(${i})"><svg viewBox="0 0 24 24"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+            </div>`).join('');
+
+        const cList = document.getElementById('classesList');
+        cList.innerHTML = ChronoSettings.classes.map(c => `
+            <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; padding: 12px 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div> <span style="font-weight: 600; color: var(--text-main); font-size: 15px;">${escapeHtml(c.name)}</span>
+                    <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px; background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 10px;">${c.students.length} stds</span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="action-mini-btn" onclick="openStudentsModal('${c.id}')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
+                    <button class="action-mini-btn" onclick="editClass('${c.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                    <button class="action-mini-btn del" onclick="deleteClass('${c.id}')"><svg viewBox="0 0 24 24"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+            </div>`).join('');
+
+        const pList = document.getElementById('periodsList');
+        pList.innerHTML = ChronoSettings.periods.map((p, i) => `
+            <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.05); border-radius: 12px; padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <span style="font-weight: 600; color: var(--text-main); font-size: 14px; min-width: 80px;">${escapeHtml(p.name)}</span>
+                    <span style="font-size: 12px; color: var(--text-muted); background: rgba(0,0,0,0.05); padding: 4px 8px; border-radius: 8px;">${formatTime24to12(p.start)} - ${formatTime24to12(p.end)}</span>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="action-mini-btn" onclick="editPeriod(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                    <button class="action-mini-btn del" onclick="deletePeriod(${i})"><svg viewBox="0 0 24 24"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+            </div>`).join('');
+    }
+
+    async function editTask(index) {
+        let oldName = ChronoSettings.tasks[index];
+        let newName = await UI.prompt(`Edit task name. Updates will reflect across timeline history.`, "Edit Task", "text", oldName);
+        if(newName && newName.trim() !== "" && newName !== oldName) {
+            newName = newName.trim(); ChronoSettings.tasks[index] = newName;
+            for(let date in ChronoDB) { ChronoDB[date].forEach(rec => { if(rec.customName && rec.customName.includes(oldName)) { rec.customName = rec.customName.replace(oldName, newName); } }); }
+            saveDB(); saveSettings(); renderSettings();
+        }
+    }
+
+    async function editClass(id) {
+        let cls = ChronoSettings.classes.find(c => c.id === id); let oldName = cls.name;
+        let newName = await UI.prompt(`Edit class name. Timetable matrix and past logs will be updated.`, "Edit Class Name", "text", oldName);
+        if(newName && newName.trim() !== "" && newName !== oldName) {
+            newName = newName.trim(); cls.name = newName;
+            for(let day in ChronoSettings.weeklyTimetable) {
+                for(let p in ChronoSettings.weeklyTimetable[day]) {
+                    let val = ChronoSettings.weeklyTimetable[day][p];
+                    if(val && val.includes(oldName)) { ChronoSettings.weeklyTimetable[day][p] = val.replace(oldName, newName); }
+                }
+            }
+            for(let date in ChronoDB) { ChronoDB[date].forEach(rec => { if(rec.customName && rec.customName.includes(oldName)) { rec.customName = rec.customName.replace(oldName, newName); } }); }
+            saveDB(); saveSettings(); renderSettings();
+        }
+    }
+
+    async function editPeriod(index) {
+        let p = ChronoSettings.periods[index]; let oldName = p.name;
+        let newName = await UI.prompt(`Edit period name. Keep simple (e.g. Period 2).`, "Edit Period Name", "text", oldName);
+        if(newName && newName.trim() !== "" && newName !== oldName) {
+            newName = newName.trim(); p.name = newName;
+            for(let day in ChronoSettings.weeklyTimetable) {
+                if(ChronoSettings.weeklyTimetable[day][oldName] !== undefined) {
+                    ChronoSettings.weeklyTimetable[day][newName] = ChronoSettings.weeklyTimetable[day][oldName]; delete ChronoSettings.weeklyTimetable[day][oldName];
+                }
+            }
+            saveSettings(); renderSettings(); renderTimetableEditorGrid();
+        }
+    }
+
+    async function editStudent(index) {
+        let cls = ChronoSettings.classes.find(c => c.id === editingClassId); let oldName = cls.students[index];
+        let newName = await UI.prompt(`Edit student name. This will auto-update past class log sheets!`, "Edit Student", "text", oldName);
+        if(newName && newName.trim() !== "" && newName !== oldName) {
+            newName = newName.trim(); cls.students[index] = newName;
+            for(let date in ChronoDB) { ChronoDB[date].forEach(rec => { if(rec.type === 'checklist' && rec.isClassTask) { rec.content.forEach(item => { if(item.text === oldName) item.text = newName; }); } }); }
+            saveDB(); saveSettings(); renderStudentsList(); renderSettings(); if(activeDateStr) renderTimeline();
+        }
+    }
+
+    function addPeriod() {
+        let name = document.getElementById('newPeriodName').value.trim();
+        let start = document.getElementById('newPeriodStart').value; let end = document.getElementById('newPeriodEnd').value;
+        if(name && start && end) {
+            ChronoSettings.periods.push({name, start, end}); ChronoSettings.periods.sort((a,b) => a.start.localeCompare(b.start));
+            document.getElementById('newPeriodName').value = ''; document.getElementById('newPeriodStart').value = ''; document.getElementById('newPeriodEnd').value = '';
+            saveSettings(); renderSettings();
+        } else { UI.alert("Please fill all period details (Name, Start Time, and End Time)."); }
+    }
+
+    async function deletePeriod(index) { if(await UI.confirm(`Delete "${ChronoSettings.periods[index].name}" from your schedule?`)) { ChronoSettings.periods.splice(index, 1); saveSettings(); renderSettings(); } }
+    function addTask() { let val = document.getElementById('newTaskInput').value.trim(); if(val) { ChronoSettings.tasks.push(val); document.getElementById('newTaskInput').value = ''; saveSettings(); renderSettings(); } }
+    async function deleteTask(index) { if(await UI.confirm("Delete task snippet?")) { ChronoSettings.tasks.splice(index, 1); saveSettings(); renderSettings(); } }
+    function addClass() { let val = document.getElementById('newClassInput').value.trim(); if(val) { ChronoSettings.classes.push({ id: generateId(), name: val, students: [] }); document.getElementById('newClassInput').value = ''; saveSettings(); renderSettings(); } }
+    async function deleteClass(id) { if(await UI.confirm("Delete entire class roster?")) { ChronoSettings.classes = ChronoSettings.classes.filter(c => c.id !== id); saveSettings(); renderSettings(); } }
+
+    async function importClassesJSON(event) {
+        let file = event.target.files[0]; if(!file) return;
+        try {
+            let text = await file.text(); let data = JSON.parse(text); let addedStudents = 0; let addedClasses = 0;
+            for (let cName in data) {
+                if (Array.isArray(data[cName])) {
+                    let existingCls = ChronoSettings.classes.find(c => c.name === cName);
+                    if (!existingCls) { existingCls = { id: generateId(), name: cName, students: [] }; ChronoSettings.classes.push(existingCls); addedClasses++; }
+                    data[cName].forEach(student => {
+                        let sName = String(student).trim();
+                        if (sName && !existingCls.students.includes(sName)) { existingCls.students.push(sName); addedStudents++; }
+                    });
+                }
+            }
+            saveSettings(); renderSettings(); await UI.alert(`Successfully imported/updated. Added ${addedClasses} new classes and ${addedStudents} new students.`, "JSON Import Complete");
+        } catch (e) { await UI.alert("Invalid JSON format.<br><br>Please use the format:<br><code>{ \"Class 10A\": [\"John\", \"Jane\"] }</code>", "JSON Error"); }
+        event.target.value = '';
+    }
+
+    let editingClassId = null;
+    function openStudentsModal(id) {
+        editingClassId = id; let cls = ChronoSettings.classes.find(c => c.id === id);
+        document.getElementById('studentsModalTitle').innerText = cls.name + " Roster"; renderStudentsList(); UI._show('studentsModal');
+    }
+
+    function renderStudentsList() {
+        let cls = ChronoSettings.classes.find(c => c.id === editingClassId); const sList = document.getElementById('studentsList');
+        sList.innerHTML = cls.students.map((s, i) => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.7); border: 1px solid rgba(0,0,0,0.05); border-radius: 10px; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--text-main);">
+                <span>${escapeHtml(s)}</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-mini-btn" style="width:26px; height:26px;" onclick="editStudent(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+                    <button class="action-mini-btn del" style="width:26px; height:26px;" onclick="deleteStudent(${i})"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+            </div>`).join('');
+    }
+
+    function addStudent() {
+        let input = document.getElementById('newStudentInput'); let val = input.value.trim();
+        if(val) {
+            let cls = ChronoSettings.classes.find(c => c.id === editingClassId); let names = val.split(',').map(n => n.trim()).filter(n => n);
+            cls.students.push(...names); input.value = ''; saveSettings(); renderStudentsList(); renderSettings(); 
+        }
+    }
+    function deleteStudent(index) { let cls = ChronoSettings.classes.find(c => c.id === editingClassId); cls.students.splice(index, 1); saveSettings(); renderStudentsList(); renderSettings(); }
+
+    async function openClassActionModal() {
+        toggleActionSheet();
+        if(ChronoSettings.classes.length === 0) { await UI.alert("Please add Classes in Settings first."); return; }
+        if(ChronoSettings.tasks.length === 0) { await UI.alert("Please add Task snippets in Settings first."); return; }
+        let cSelect = document.getElementById('classSelect'); cSelect.innerHTML = ChronoSettings.classes.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+        let tSelect = document.getElementById('taskSelect'); tSelect.innerHTML = ChronoSettings.tasks.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        UI._show('classActionModal');
+    }
+
+    async function createClassChecklist() {
+        let classId = document.getElementById('classSelect').value; let taskName = document.getElementById('taskSelect').value;
+        let cls = ChronoSettings.classes.find(c => c.id === classId);
+        if(cls) {
+            if(cls.students.length === 0) { await UI.alert(`Please add students to ${cls.name} in Settings first.`); return; }
+            let checklistData = cls.students.map(s => ({ text: s, done: false, note: "" }));
+            let customStampName = `${cls.name} - ${taskName}`;
+            addRecord('checklist', checklistData, customStampName, true); UI.closeAll();
+        }
+    }
+
+    // --- DASHBOARD AND DOM RENDER ENGINES ---
+    function renderDashboard() {
+        const dash = document.getElementById('dashCards'); dash.innerHTML = "";
+        let y = currentViewMonth.getFullYear(); let m = currentViewMonth.getMonth();
+        let daysInMonth = new Date(y, m + 1, 0).getDate(); let todayStr = getTodayStr();
+        let allCardsHTML = "";
+
+        let monthlyDateStr = `${y}-${String(m+1).padStart(2,'0')}-MONTHLY`; let rm = ChronoDB[monthlyDateStr] || [];
+        let m_texts = rm.filter(x => !x.isDeleted && x.type === 'text').length;
+        let m_media = rm.filter(x => !x.isDeleted && (x.type === 'image' || x.type === 'csv' || x.type === 'pdf')).length;
+        let m_checks = rm.filter(x => !x.isDeleted && x.type === 'checklist').length;
+        let m_isEmpty = (rm.filter(x=>!x.isDeleted).length === 0);
+
+        allCardsHTML += `
+            <div class="date-card ${m_isEmpty ? 'empty' : ''}" style="border: 2px dashed var(--primary); background: rgba(9, 132, 227, 0.05);" onclick="openTimeline('${monthlyDateStr}')">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div class="date-badge" style="background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%); box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);">
+                        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-bottom: 4px;">GENERAL</div>
+                        <div style="font-size: 24px; font-weight: 800; line-height: 1; margin-bottom: 6px;">ALL</div>
+                        <div style="font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.2); padding: 2px 4px; border-radius: 6px;">${String(m+1).padStart(2,'0')}/${String(y).slice(-2)}</div>
+                    </div>
+                    <div style="flex: 1;">
+                        <div class="date-card-header"> <span>Monthly Common Log</span> </div>
+                        <div class="date-card-summary">
+                            ${m_texts>0 ? `<div class="summary-badge">📝 ${m_texts} Notes</div>` : ''} ${m_media>0 ? `<div class="summary-badge">🖼️ ${m_media} Files</div>` : ''}
+                            ${m_checks>0 ? `<div class="summary-badge">☑️ ${m_checks} Tasks</div>` : ''} ${m_isEmpty ? '<div class="summary-badge" style="opacity:0.7">Tap to Add Log</div>' : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        for(let d = 1; d <= daysInMonth; d++) {
+            let dd = String(d).padStart(2,'0'); let mm = String(m+1).padStart(2,'0'); let dateStr = `${y}-${mm}-${dd}`;
+            let dObj = new Date(y, m, d); let dayShort = dObj.toLocaleDateString('en-US', { weekday: 'short' }); let yy = String(y).slice(-2);
+            let r = ChronoDB[dateStr] || []; let isCurrentDay = (dateStr === todayStr);
+            let texts = r.filter(x => !x.isDeleted && x.type === 'text').length;
+            let media = r.filter(x => !x.isDeleted && (x.type === 'image' || x.type === 'csv' || x.type === 'pdf')).length;
+            let checks = r.filter(x => !x.isDeleted && x.type === 'checklist').length;
+            let isEmpty = (r.filter(x=>!x.isDeleted).length === 0);
+
+            allCardsHTML += `
+                <div class="date-card ${isEmpty ? 'empty' : ''} ${isCurrentDay ? 'today' : ''}" onclick="openTimeline('${dateStr}')">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div class="date-badge">
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9; margin-bottom: 4px;">${dayShort}</div>
+                            <div style="font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 6px;">${dd}</div>
+                            <div style="font-size: 12px; font-weight: 700; background: rgba(255,255,255,0.2); padding: 2px 4px; border-radius: 6px;">${mm}/${yy}</div>
+                        </div>
+                        <div style="flex: 1;">
+                            <div class="date-card-header"> <span>Daily Record</span> ${isCurrentDay ? '<span style="font-size:10px; background:var(--danger); color:white; padding:4px 8px; border-radius:12px; font-weight:800; letter-spacing:0.5px;">TODAY</span>' : ''} </div>
+                            <div class="date-card-summary">
+                                ${texts>0 ? `<div class="summary-badge">📝 ${texts} Notes</div>` : ''} ${media>0 ? `<div class="summary-badge">🖼️ ${media} Files</div>` : ''}
+                                ${checks>0 ? `<div class="summary-badge">☑️ ${checks} Tasks</div>` : ''} ${isEmpty ? '<div class="summary-badge" style="opacity:0.7">Tap to Add Log</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+        dash.innerHTML = allCardsHTML;
+        setTimeout(() => {
+            const todayCard = document.querySelector('.date-card.today');
+            if(todayCard && y === new Date().getFullYear() && m === new Date().getMonth()) { todayCard.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }, 100);
+    }
+
+    function toggleExpand(stampId, btn) {
+        if(document.getElementById('timelineContainer').classList.contains('read-only')) return;
+        let record = ChronoDB[activeDateStr].find(r => r.id === stampId);
+        if(record) {
+            record.isExpanded = !record.isExpanded; saveDB(); let el = document.getElementById(`clamp-${stampId}`);
+            if(record.isExpanded) {
+                el.classList.add('expanded'); btn.classList.add('expanded');
+                btn.innerHTML = 'Show Less <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 15l-6-6-6 6"/></svg>';
+            } else {
+                el.classList.remove('expanded'); btn.classList.remove('expanded');
+                btn.innerHTML = 'Show More <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>';
+            }
+        }
+    }
+
+    let pressTimer;
+    function startRenamePress(id) { pressTimer = window.setTimeout(() => openRenameModal(id), 600); }
+    function cancelRenamePress() { clearTimeout(pressTimer); }
+
+    function toggleTaskNote(stampId, itemIdx) {
+        if(document.getElementById('timelineContainer').classList.contains('read-only')) return;
+        let container = document.getElementById(`note-container-${stampId}-${itemIdx}`);
+        if (container.style.display === 'none') { container.style.display = 'block'; container.querySelector('input').focus(); } else { container.style.display = 'none'; }
+    }
+
+    function saveTaskNote(stampId, itemIdx, value) {
+        let record = ChronoDB[activeDateStr].find(r => r.id === stampId);
+        if(record && record.type === 'checklist') { record.content[itemIdx].note = value; saveDB(); }
+    }
+
+    function renderTimeline() {
+        const container = document.getElementById('timelineContainer'); container.innerHTML = `<div class="timeline-line"></div>`; 
+        let records = ChronoDB[activeDateStr] || [];
+        if(records.length === 0) { container.innerHTML += "<div style='padding-left: 30px; color: var(--text-muted);'>Empty log. Tap + to begin logging.</div>"; return; }
+
+        records.forEach(record => {
+            let contentHTML = ""; let interactiveClass = ""; let clickAttr = ""; let needsClamp = false;
+            let periodName = getPeriodForRecord(record.time); let assignedClass = getClassForDayAndPeriod(activeDateStr, periodName);
+            let displayTagText = periodName; if(assignedClass) { displayTagText += `: ${assignedClass}`; }
+            let periodTagHTML = periodName ? `<span style="font-size: 10px; font-weight: 700; color: #fff; background: #e17055; padding: 3px 8px; border-radius: 8px; user-select: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(displayTagText)}</span>` : '';
+
+            if (record.isDeleted) {
+                contentHTML = `<div class="stamp-deleted"><svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Moved to App Recycle Bin</div>`;
+            } 
+            else if (record.type === 'text') {
+                if(record.content.length > 400) needsClamp = true;
+                contentHTML = `<div class="stamp-text">${escapeHtml(record.content)}</div>`;
+            } 
+            else if (record.type === 'image') {
+                interactiveClass = "interactive-media"; clickAttr = `onclick="openFullscreen('${record.id}')"`;
+                contentHTML = `<img src="${record.content}" class="stamp-image" alt="Image">`;
+            } 
+            else if (record.type === 'pdf') {
+                contentHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(0,0,0,0.03); border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
+                    <div style="background: var(--danger); color: white; padding: 8px; border-radius: 8px; display:flex; align-items:center; justify-content:center;">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <div style="flex:1; overflow: hidden;">
+                        <div style="font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main);">PDF Document</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Tap download icon to save & view</div>
+                    </div>
+                </div>`;
+            }
+            else if (record.type === 'csv') {
+                interactiveClass = "interactive-media"; clickAttr = `onclick="openFullscreen('${record.id}')"`;
+                contentHTML = `<div class="stamp-table-wrapper"><table class="stamp-table">`;
+                record.content.forEach((row, i) => {
+                    contentHTML += "<tr>";
+                    row.forEach(cell => { contentHTML += i === 0 ? `<th>${escapeHtml(String(cell))}</th>` : `<td>${escapeHtml(String(cell))}</td>`; });
+                    contentHTML += "</tr>";
+                });
+                contentHTML += `</table></div>`;
+            }
+            else if (record.type === 'checklist') {
+                if(record.content.length > 5) needsClamp = true;
+                let isCT = record.isClassTask; let itemClass = isCT ? 'checklist-item class-task-item' : 'checklist-item standard-task-item';
+                contentHTML += `<div class="checklist-grid">`;
+                record.content.forEach((item, idx) => {
+                    let noteHTML = ""; let noteBtnHTML = "";
+                    if (isCT) {
+                        noteBtnHTML = `<button type="button" class="action-mini-btn" style="width: 28px; height: 28px; color: var(--text-muted); background: rgba(0,0,0,0.05);" onclick="toggleTaskNote('${record.id}', ${idx})"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg></button>`;
+                        noteHTML = `
+                        <div id="note-container-${record.id}-${idx}" style="display: ${item.note ? 'block' : 'none'}; padding: 4px 10px 10px 42px;">
+                            <input type="text" class="styled-input task-note-input" style="padding: 6px 10px; font-size: 13px; margin: 0; border-radius: 8px; background: rgba(255,255,255,0.8); border: 1px dashed rgba(0,0,0,0.15);" placeholder="Add note for ${escapeHtml(item.text)}..." value="${escapeHtml(item.note || '')}" onchange="saveTaskNote('${record.id}', ${idx}, this.value)">
+                        </div>`;
+                    }
+                    contentHTML += `
+                        <div style="display:flex; flex-direction:column; gap:2px; margin-bottom: 2px;">
+                            <label class="${itemClass} ${item.done ? 'done' : ''}" style="margin-bottom:0;">
+                                <span style="font-weight:700; color:var(--text-muted); width:20px; text-align:right;">${idx+1}.</span>
+                                <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleCheck('${record.id}', ${idx}, this.checked)">
+                                <span class="cl-text" style="flex:1;">${escapeHtml(item.text)}</span>
+                                ${noteBtnHTML}
+                            </label>
+                            ${noteHTML}
+                        </div>`;
+                });
+                contentHTML += `</div>`;
+            }
+
+            if(needsClamp) {
+                let expClass = record.isExpanded ? 'expanded' : '';
+                let btnText = record.isExpanded ? 'Show Less <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 15l-6-6-6 6"/></svg>' : 'Show More <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9l6 6 6-6"/></svg>';
+                contentHTML = `<div class="clamped-content ${expClass}" id="clamp-${record.id}">${contentHTML}</div><button class="show-more-btn ${expClass}" onclick="toggleExpand('${record.id}', this)">${btnText}</button>`;
+            }
+
+            let copyBtn = (!record.isDeleted) ? `<div class="action-mini-btn" onclick="copyRecord('${record.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></div>` : '';
+            let dlBtn = (!record.isDeleted && record.type !== 'checklist') ? `<div class="action-mini-btn" onclick="downloadStamp(event, '${record.id}')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>` : '';
+            let delBtn = `<div class="action-mini-btn del" onclick="deleteRecordPrompt('${record.id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>`;
+
+            container.innerHTML += `
+                <div class="stamp-item"> <div class="stamp-dot"></div>
+                    <div class="stamp-header"> <span class="stamp-time">${record.time}</span> ${periodTagHTML}
+                        <span class="stamp-name" onmousedown="startRenamePress('${record.id}')" onmouseup="cancelRenamePress()" onmouseleave="cancelRenamePress()" ontouchstart="startRenamePress('${record.id}')" ontouchend="cancelRenamePress()">
+                            ${escapeHtml(record.customName)}
+                        </span>
+                    </div>
+                    <div class="stamp-content ${interactiveClass}" ${clickAttr}>
+                        <div class="stamp-actions">${copyBtn}${dlBtn}${delBtn}</div> ${contentHTML}
+                    </div>
+                </div>`;
+        });
+        setTimeout(() => { const view = document.getElementById('timelineView'); view.scrollTo({ top: view.scrollHeight, behavior: 'smooth' }); }, 100);
+    }
+
+    // --- RENAMING, ROSTERS & COPY-PASTE ENGINE STACK ---
+    function openRenameModal(id) {
+        if(document.getElementById('timelineContainer').classList.contains('read-only')) return;
+        let record = ChronoDB[activeDateStr].find(r => r.id === id); if(!record) return;
+        document.getElementById('renameTargetId').value = id; document.getElementById('renameInput').value = record.customName; UI._show('renameModal');
+    }
+
+    function saveRename() {
+        let id = document.getElementById('renameTargetId').value; let newName = document.getElementById('renameInput').value.trim();
+        let record = ChronoDB[activeDateStr].find(r => r.id === id); if(record && newName) { record.customName = newName; saveDB(); renderTimeline(); } UI.closeAll();
+    }
+
+    async function copyRecord(id) {
+        let record = ChronoDB[activeDateStr].find(r => r.id === id);
+        if(record) { localStorage.setItem('ChronoCopiedLog', JSON.stringify(record)); await UI.alert("Log copied! You can now paste it directly into any day using the + menu.", "Copied to Clipboard"); }
+    }
+
+    async function pasteRecord() {
+        toggleActionSheet(); let copiedStr = localStorage.getItem('ChronoCopiedLog');
+        if(!copiedStr) { await UI.alert("Nothing to paste. Copy a log using the icon first.", "Clipboard Empty"); return; }
+        let copied = JSON.parse(copiedStr);
+        if(copied.type === 'checklist') { copied.content.forEach(item => { item.done = false; item.note = ""; }); }
+        let freshName = copied.customName.endsWith(" (Copy)") ? copied.customName : copied.customName + " (Copy)";
+        addRecord(copied.type, copied.content, freshName, copied.isClassTask);
+    }
+
+    function toggleCheck(stampId, itemIdx, isChecked) {
+        let record = ChronoDB[activeDateStr].find(r => r.id === stampId);
+        if(record && record.type === 'checklist') { record.content[itemIdx].done = isChecked; saveDB(); renderTimeline(); }
+    }
+
+    // --- ZIP DATA PACK MANAGEMENT EXPORT / IMPORT ENGINE ---
+    function openExportModal() {
+        let clList = document.getElementById('exportClassesList');
+        let html = `<label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; overflow: hidden; white-space: nowrap;"><input type="checkbox" id="expClassNone" checked> General Data</label>`;
+        ChronoSettings.classes.forEach(c => {
+            html += `<label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;"><input type="checkbox" class="exp-class-cb" value="${escapeHtml(c.name)}" checked> ${escapeHtml(c.name)}</label>`;
+        });
+        clList.innerHTML = html; document.querySelectorAll('.exp-type-cb').forEach(cb => cb.checked = true); UI._show('exportModal');
+    }
+
+    async function processExportMonthZip() {
+        let types = Array.from(document.querySelectorAll('.exp-type-cb')).filter(cb => cb.checked).map(cb => cb.value);
+        let includeGeneral = document.getElementById('expClassNone').checked;
+        let selectedClasses = Array.from(document.querySelectorAll('.exp-class-cb')).filter(cb => cb.checked).map(cb => cb.value);
+        let m = currentViewMonth.getMonth(); let y = currentViewMonth.getFullYear();
+        let exportData = {}; let hasData = false;
+        let sortedClasses = [...ChronoSettings.classes].sort((a,b) => b.name.length - a.name.length);
+        let zip = new JSZip(); let fileName = `ChronoLog_Export_${y}_${String(m+1).padStart(2,'0')}`;
+
+        for(let date in ChronoDB) {
+            let isMonthly = date.endsWith('-MONTHLY'); let dObj = isMonthly ? new Date(date.slice(0,7) + "-01T12:00:00") : new Date(date + "T12:00:00");
+            if(!isNaN(dObj) && dObj.getMonth() === m && dObj.getFullYear() === y) {
+                let filteredRecords = ChronoDB[date].filter(record => {
+                    if(record.isDeleted) return false; if(!types.includes(record.type)) return false;
+                    let recClass = null; for(let c of sortedClasses) { if(record.customName && record.customName.includes(c.name)) { recClass = c.name; break; } }
+                    if(recClass) { if(!selectedClasses.includes(recClass)) return false; } else { if(!includeGeneral) return false; }
+                    return true;
+                });
+                
+                if(filteredRecords.length > 0) {
+                    hasData = true; exportData[date] = []; let dateFolder = zip.folder(date);
+                    filteredRecords.forEach(record => {
+                        let expRec = { ...record }; let safeName = (expRec.customName || 'Record').replace(/[^a-zA-Z0-9-]/g, '_');
+                        let timeStr = expRec.time.replace(/[: ]/g, ''); let baseFilename = `${safeName}_${timeStr}_${expRec.id.slice(-5)}`;
+                        
+                        if(expRec.type === 'text') { dateFolder.file(baseFilename + ".txt", expRec.content); }
+                        else if(expRec.type === 'checklist') {
+                            let textDump = expRec.content.map(c => `[${c.done ? 'x' : ' '}] ${c.text}${c.note ? ' - ' + c.note : ''}`).join('\n');
+                            dateFolder.file(baseFilename + "_Checklist.txt", textDump);
+                        }
+                        else if(expRec.type === 'image' || expRec.type === 'pdf') {
+                            dateFolder.file(baseFilename + "_CloudLink.txt", `Cloud Storage Asset URL Address:\n${expRec.content}`);
+                        }
+                        else if(expRec.type === 'csv') {
+                            let ws = XLSX.utils.aoa_to_sheet(expRec.content); let wb = XLSX.utils.book_new();
+                            XLSX.utils.book_append_sheet(wb, ws, "Data"); let b64 = XLSX.write(wb, {bookType:'xlsx', type:'base64'});
+                            dateFolder.file(baseFilename + ".xlsx", b64, { base64: true });
+                        }
+                        exportData[date].push(expRec);
+                    });
+                }
+            }
+        }
+        if(!hasData) { await UI.alert("No records match your selected filters.", "Empty Export"); return; }
+        UI.closeAll(); zip.file(`${fileName}.json`, JSON.stringify(exportData, null, 2));
+
+        if (window.AndroidBridge) {
+            let base64 = await zip.generateAsync({type:"base64"}); window.AndroidBridge.saveFile(base64, fileName, "zip");
+        } else {
+            let content = await zip.generateAsync({type:"blob"}); let link = document.createElement("a");
+            link.href = URL.createObjectURL(content); link.download = fileName + ".zip"; link.click();
+        }
+    }
+
+    async function importMonthZip(event) {
+        let file = event.target.files[0]; if(!file) return;
+        try {
+            let zip = await JSZip.loadAsync(file);
+            let filename = Object.keys(zip.files).find(n => n.endsWith('.json') && n.toLowerCase().includes('chronolog'));
+            if(!filename) { await UI.alert("Invalid ZIP format. JSON mapping missing."); return; }
+            let jsonString = await zip.file(filename).async("string"); let importedData = JSON.parse(jsonString);
+            let count = 0;
+            for(let date in importedData) {
+                if(!ChronoDB[date]) ChronoDB[date] = [];
+                for(let i = 0; i < importedData[date].length; i++) {
+                    let impRec = importedData[date][i];
+                    if(!ChronoDB[date].find(r => r.id === impRec.id)) { ChronoDB[date].push(impRec); count++; }
+                }
+            }
+            saveDB(); renderDashboard(); await UI.alert(`Successfully imported ${count} records!`);
+        } catch(e) { console.error(e); await UI.alert("Error reading ZIP. Ensure the file is a valid ChronoLog export."); }
+        event.target.value = '';
+    }
+
+    function downloadStamp(event, id) {
+        event.stopPropagation(); let record = ChronoDB[activeDateStr].find(r => r.id === id); if(!record || record.isDeleted) return;
+        let fname = `${record.customName}_${record.time.replace(/[: ]/g, '')}`;
+        
+        if(record.type === 'text') {
+            if (window.AndroidBridge) {
+                let reader = new FileReader(); reader.onload = function() { window.AndroidBridge.saveFile(reader.result.split(',')[1], fname, "txt"); };
+                reader.readAsDataURL(new Blob([record.content], { type: "text/plain" }));
+            } else {
+                let a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([record.content], { type: "text/plain" }));
+                a.download = fname + ".txt"; a.click();
+            }
+        } 
+        else if(record.type === 'image' || record.type === 'pdf') {
+            window.open(record.content, '_blank');
+        } 
+        else if(record.type === 'csv') {
+            let ws = XLSX.utils.aoa_to_sheet(record.content); let wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Data"); 
+            if (window.AndroidBridge) {
+                let base64 = XLSX.write(wb, {bookType:'xlsx', type:'base64'}); window.AndroidBridge.saveFile(base64, fname, "xlsx");
+            } else { XLSX.writeFile(wb, fname + ".xlsx"); }
+        }
+    }
+
+    // --- DATA PACK PACKET CREATION CONTEXTS ---
+    function generateId() { return 'id_' + Math.random().toString(36).substr(2, 9); }
+    function getDefaultName(type) { 
+        if(activeDateStr.endsWith('-MONTHLY')) return `General_${type.toUpperCase()}`;
+        let d = new Date(activeDateStr + "T12:00:00"); return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${type.toUpperCase()}`; 
+    }
+
+    function addRecord(type, content, customName = null, isClassTask = false) {
+        if(!ChronoDB[activeDateStr]) ChronoDB[activeDateStr] = []; 
+        ChronoDB[activeDateStr].push({ 
+            id: generateId(), time: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), 
+            type: type, content: content, customName: customName || getDefaultName(type), isDeleted: false,
+            isClassTask: isClassTask, isExpanded: false
+        });
+        saveDB(); renderTimeline();
+    }
+
+    let sheetOpen = false;
+    function toggleActionSheet() {
+        sheetOpen = !sheetOpen; const sheet = document.getElementById('actionSheet'); const overlay = document.getElementById('sheetOverlay');
+        if(sheetOpen) { overlay.style.display = 'block'; setTimeout(() => { overlay.style.opacity = '1'; sheet.classList.add('active'); }, 10); } 
+        else { sheet.classList.remove('active'); overlay.style.opacity = '0'; setTimeout(() => overlay.style.display = 'none', 300); }
+    }
+
+    function openTextModal() { toggleActionSheet(); document.getElementById('noteInput').value = ""; UI._show('textModal'); }
+    function saveTextNote() { let txt = document.getElementById('noteInput').value.trim(); if(txt) { addRecord('text', txt); UI.closeAll(); } }
+
+    let tempChecklist = [];
+    function openChecklistModal() { toggleActionSheet(); tempChecklist = []; updateChecklistUI(); document.getElementById('newCheckItem').value = ""; UI._show('checklistModal'); }
+    function addCheckItemUI() { let val = document.getElementById('newCheckItem').value.trim(); if(val) { tempChecklist.push({text: val, done: false}); document.getElementById('newCheckItem').value = ""; updateChecklistUI(); } }
+    function updateChecklistUI() {
+        let list = document.getElementById('checkItemsList'); list.innerHTML = "";
+        tempChecklist.forEach(item => { list.innerHTML += `<div style="padding:4px; border-bottom:1px solid #eee; font-size:14px;">- ${escapeHtml(item.text)}</div>`; });
+    }
+    function saveChecklist() { if(tempChecklist.length > 0) { addRecord('checklist', tempChecklist); UI.closeAll(); } }
+
+    async function handleFileImport(event, type) {
+        let file = event.target.files[0]; if (!file) return; toggleActionSheet();
+        if (type === 'image' || (type === 'doc' && file.name.split('.').pop().toLowerCase() === 'pdf')) {
+            try {
+                let secureUrl = await uploadMediaFileToCloud(file);
+                addRecord(type === 'image' ? 'image' : 'pdf', secureUrl, file.name.replace(/\.[^/.]+$/, ""));
+            } catch (e) { alert("Asset storage pipeline upload aborted due to processing error."); }
+            event.target.value = '';
+        } else if (type === 'doc') {
+            let reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    let wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    let rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                    let clean = rows.filter(r => r.length > 0 && r.some(c => c !== undefined && c !== null && String(c).trim() !== ""));
+                    if(clean.length > 0) addRecord('csv', clean, file.name.replace(/\.[^/.]+$/, ""));
+                } catch(err) { await UI.alert("Invalid File."); }
+                event.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    function openFullscreen(id) {
+        let record = ChronoDB[activeDateStr].find(r => r.id === id); if(!record || record.isDeleted) return;
+        const modal = document.getElementById('fullscreenModal'); const body = document.getElementById('fsBody');
+        document.getElementById('fsTitle').innerText = record.customName;
+        
+        if(record.type === 'image') { body.innerHTML = `<img src="${record.content}">`; } 
+        else if (record.type === 'csv') {
+            let html = `<div class="table-container"><table>`;
+            record.content.forEach((r, i) => { html += "<tr>"; r.forEach(c => html += i===0 ? `<th>${escapeHtml(String(c))}</th>` : `<td>${escapeHtml(String(c))}</td>`); html += "</tr>"; });
+            body.innerHTML = html + `</table></div>`;
+        }
+        modal.style.display = 'flex'; setTimeout(() => modal.style.opacity = '1', 10);
+    }
+    function closeFullscreen() { const m = document.getElementById('fullscreenModal'); m.style.opacity = '0'; setTimeout(() => m.style.display = 'none', 300); }
+
+    function escapeHtml(unsafe) { return unsafe ? String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;") : ""; }
+
+    window.onload = () => { 
+        goHome(); 
+        document.getElementById('authOverlay').style.display = 'flex';
+    };
+</script>
+</body>
+</html>
